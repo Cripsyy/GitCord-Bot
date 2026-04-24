@@ -53,3 +53,6 @@ temp/
 
 # Docker local overrides
 docker-compose.override.yml
+
+# Development plan files
+development_plan.json

@@ -17,3 +17,17 @@ class DiscordAssistantClient(discord.Client):
 
     async def on_disconnect(self) -> None:
         self.logger.warning("Discord client disconnected.")
+
+    async def send_embed_to_channel(self, channel_id: int, embed: discord.Embed) -> None:
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            fetched = await self.fetch_channel(channel_id)
+            if not isinstance(fetched, discord.abc.Messageable):
+                raise TypeError(f"Channel {channel_id} is not messageable")
+            await fetched.send(embed=embed)
+            return
+
+        if not isinstance(channel, discord.abc.Messageable):
+            raise TypeError(f"Channel {channel_id} is not messageable")
+
+        await channel.send(embed=embed)
