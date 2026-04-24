@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     discord_bot_token: str
     discord_guild_id: int | None = None
+    discord_notifications_channel_id: int | None = None
     github_webhook_secret: str
     github_repo_owner: str
     github_repo_name: str
