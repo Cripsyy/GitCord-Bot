@@ -44,6 +44,32 @@ async def github_webhook_listener(request: Request) -> dict[str, str]:
 
     if event_type == "pull_request":
         embed = build_pull_request_embed(payload)
+        pull_request_action = payload.get("action")
+        pull_request_number = payload.get("pull_request", {}).get("number")
+        repo_full_name = payload.get("repository", {}).get("full_name")
+
+        if not isinstance(pull_request_number, int) or not isinstance(repo_full_name, str):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing pull request metadata",
+            )
+
+        try:
+            await bot_client.send_pull_request_notification(
+                channel_id=settings.discord_notifications_channel_id,
+                embed=embed,
+                repo_full_name=repo_full_name,
+                pull_request_number=pull_request_number,
+                pull_request_action=pull_request_action,
+            )
+        except Exception:
+            logger.exception("Failed to send PR notification with interactive controls")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Could not forward PR event to Discord",
+            )
+
+        return {"message": f"Webhook received and forwarded ({event_type})"}
     elif event_type == "issues":
         embed = build_issue_embed(payload)
     else:

@@ -17,7 +17,7 @@ async def run() -> None:
 
     intents = discord.Intents.default()
     intents.guilds = True
-    bot_client = DiscordAssistantClient(intents=intents)
+    bot_client = DiscordAssistantClient(intents=intents, settings=settings)
 
     app = create_app(settings=settings, bot_client=bot_client)
     uvicorn_config = uvicorn.Config(
