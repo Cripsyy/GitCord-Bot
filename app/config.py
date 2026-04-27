@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     github_repo_owner: str
     github_repo_name: str
     github_token: str
+    ai_summary_enabled: bool = True
+    llm_api_key: str | None = None
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_model: str = "gpt-4o-mini"
+    llm_timeout_seconds: int = 20
+    ai_max_diff_chars: int = 12000
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(
