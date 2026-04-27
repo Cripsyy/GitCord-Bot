@@ -3,8 +3,9 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from app.bot.embeds import build_issue_embed, build_pull_request_embed
+from app.bot.embeds import build_issue_embed, build_pull_request_embed, build_push_embed
 from app.config import Settings
+from app.services.ai_summary import fetch_pull_request_diff, summarize_pull_request_diff
 from app.services.signature import is_valid_github_signature
 
 router = APIRouter(prefix="/webhooks", tags=["github"])
@@ -43,16 +44,32 @@ async def github_webhook_listener(request: Request) -> dict[str, str]:
         return {"message": "Webhook received (Discord channel not configured)"}
 
     if event_type == "pull_request":
-        embed = build_pull_request_embed(payload)
         pull_request_action = payload.get("action")
         pull_request_number = payload.get("pull_request", {}).get("number")
         repo_full_name = payload.get("repository", {}).get("full_name")
+        pull_request_title = payload.get("pull_request", {}).get("title", "Untitled pull request")
+        pull_request_body = payload.get("pull_request", {}).get("body") or ""
 
         if not isinstance(pull_request_number, int) or not isinstance(repo_full_name, str):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Missing pull request metadata",
             )
+
+        ai_summary: str | None = None
+        try:
+            diff_text = fetch_pull_request_diff(settings, repo_full_name, pull_request_number)
+            ai_summary = summarize_pull_request_diff(
+                settings,
+                pull_request_title=pull_request_title,
+                pull_request_body=pull_request_body,
+                diff_text=diff_text,
+            )
+        except Exception:
+            logger.exception("Failed to generate AI summary for PR #%s", pull_request_number)
+            ai_summary = "AI summary unavailable due to an internal error."
+
+        embed = build_pull_request_embed(payload, ai_summary=ai_summary)
 
         try:
             await bot_client.send_pull_request_notification(
@@ -72,6 +89,8 @@ async def github_webhook_listener(request: Request) -> dict[str, str]:
         return {"message": f"Webhook received and forwarded ({event_type})"}
     elif event_type == "issues":
         embed = build_issue_embed(payload)
+    elif event_type == "push":
+        embed = build_push_embed(payload)
     else:
         logger.info("Webhook accepted for unsupported event type: %s", event_type)
         return {"message": f"Webhook received (event {event_type} ignored)"}
