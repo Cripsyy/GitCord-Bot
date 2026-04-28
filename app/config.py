@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     github_repo_owner: str
     github_repo_name: str
     github_token: str
+    database_url: str
     ai_summary_enabled: bool = True
     llm_api_key: str | None = None
     llm_base_url: str = "https://api.openai.com/v1"

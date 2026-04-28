@@ -6,14 +6,17 @@ import uvicorn
 
 from app.bot.client import DiscordAssistantClient
 from app.config import get_settings
+from app.core.database import init_database
 from app.logging_config import configure_logging
 from app.server import create_app
 
 
 async def run() -> None:
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, database_url=settings.database_url)
     logger = logging.getLogger("runtime")
+
+    init_database(settings)
 
     intents = discord.Intents.default()
     intents.guilds = True

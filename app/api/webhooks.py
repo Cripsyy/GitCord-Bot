@@ -1,11 +1,13 @@
 import json
 import logging
+import threading
 
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.bot.embeds import build_issue_embed, build_pull_request_embed, build_push_embed
 from app.config import Settings
 from app.services.ai_summary import fetch_pull_request_diff, summarize_pull_request_diff
+from app.services.webhook_logger import log_webhook_event
 from app.services.signature import is_valid_github_signature
 
 router = APIRouter(prefix="/webhooks", tags=["github"])
@@ -38,6 +40,27 @@ async def github_webhook_listener(request: Request) -> dict[str, str]:
         payload = json.loads(payload_bytes.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payload") from exc
+
+    delivery_id = request.headers.get("X-GitHub-Delivery")
+    repository_name = payload.get("repository", {}).get("full_name")
+    action = payload.get("action")
+    sender = payload.get("sender", {}).get("login")
+
+    threading.Thread(
+        target=log_webhook_event,
+        args=(
+            settings,
+        ),
+        kwargs={
+            "event_type": event_type,
+            "delivery_id": delivery_id,
+            "repository": repository_name,
+            "action": action,
+            "sender": sender,
+            "payload": payload,
+        },
+        daemon=True,
+    ).start()
 
     if settings.discord_notifications_channel_id is None:
         logger.info("Webhook accepted without Discord publish: DISCORD_NOTIFICATIONS_CHANNEL_ID unset")
