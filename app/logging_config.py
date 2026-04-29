@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 
 from app.logging_handlers import DatabaseHandler
 
