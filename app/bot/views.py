@@ -14,11 +14,13 @@ class PullRequestActionsView(discord.ui.View):
         settings: Settings,
         repo_full_name: str,
         pull_request_number: int,
+        guild_id: int | None,
     ):
         super().__init__(timeout=None)
         self.settings = settings
         self.repo_full_name = repo_full_name
         self.pull_request_number = pull_request_number
+        self.guild_id = guild_id
         self.logger = logging.getLogger("discord_bot.pr_actions")
 
     async def _submit_review(self, interaction: discord.Interaction, decision: str) -> None:
@@ -41,6 +43,7 @@ class PullRequestActionsView(discord.ui.View):
                 self.pull_request_number,
                 decision,
                 reviewer,
+                self.guild_id,
             )
         except Exception as exc:
             self.logger.exception("PR review action failed")

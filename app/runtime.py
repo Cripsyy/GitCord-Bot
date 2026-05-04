@@ -4,7 +4,7 @@ import logging
 import discord
 import uvicorn
 
-from app.bot.client import DiscordAssistantClient
+from app.bot.client import DiscordAssistantClient, setup_bot_commands
 from app.config import get_settings
 from app.core.database import init_database
 from app.logging_config import configure_logging
@@ -21,6 +21,7 @@ async def run() -> None:
     intents = discord.Intents.default()
     intents.guilds = True
     bot_client = DiscordAssistantClient(intents=intents, settings=settings)
+    setup_bot_commands(bot_client)
 
     app = create_app(settings=settings, bot_client=bot_client)
     uvicorn_config = uvicorn.Config(

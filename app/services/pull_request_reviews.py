@@ -10,10 +10,10 @@ def submit_pull_request_review(
     pull_request_number: int,
     decision: str,
     reviewer: str,
+    guild_id: int | None,
 ) -> str:
-    expected_repo = f"{settings.github_repo_owner}/{settings.github_repo_name}"
-    if repo_full_name != expected_repo:
-        raise ValueError(f"Repository mismatch. Expected {expected_repo}, got {repo_full_name}")
+    if guild_id is None:
+        raise ValueError("Guild context is required for PR reviews.")
 
     review_event = "APPROVE" if decision == "approve" else "REQUEST_CHANGES"
     review_body = (

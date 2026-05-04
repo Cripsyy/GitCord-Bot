@@ -13,7 +13,12 @@ def _truncate(value: str, limit: int) -> str:
     return value[:limit]
 
 
-def fetch_pull_request_diff(settings: Settings, repo_full_name: str, pull_request_number: int) -> str:
+def fetch_pull_request_diff(
+    settings: Settings,
+    repo_full_name: str,
+    pull_request_number: int,
+    ai_max_diff_chars: int = 12000,
+) -> str:
     github_client = create_github_client(settings)
 
     try:
@@ -29,7 +34,7 @@ def fetch_pull_request_diff(settings: Settings, repo_full_name: str, pull_reques
         patch = file.patch or "(No textual patch available)"
         chunks.append(f"FILE: {file.filename}\nSTATUS: {file.status}\nPATCH:\n{patch}\n")
 
-    return _truncate("\n".join(chunks), settings.ai_max_diff_chars)
+    return _truncate("\n".join(chunks), ai_max_diff_chars)
 
 
 def summarize_pull_request_diff(
@@ -38,8 +43,11 @@ def summarize_pull_request_diff(
     pull_request_title: str,
     pull_request_body: str,
     diff_text: str,
+    ai_summary_enabled: bool = True,
+    llm_model: str | None = None,
+    ai_max_diff_chars: int = 12000,
 ) -> str | None:
-    if not settings.ai_summary_enabled:
+    if not ai_summary_enabled:
         return None
     if not settings.llm_api_key:
         return "AI summary skipped: LLM_API_KEY is not configured."
@@ -50,14 +58,15 @@ def summarize_pull_request_diff(
         "You summarize pull request diffs for engineering teams. "
         "Return exactly 3 concise bullet points about intent, key code changes, and risks."
     )
+    limited_diff = _truncate(diff_text, ai_max_diff_chars)
     user_input = (
         f"PR title: {pull_request_title}\n"
         f"PR description: {pull_request_body or 'No description'}\n"
-        f"Diff:\n{diff_text}"
+        f"Diff:\n{limited_diff}"
     )
 
     payload = {
-        "model": settings.llm_model,
+        "model": llm_model or settings.llm_model,
         "temperature": 0.2,
         "messages": [
             {"role": "system", "content": prompt},
