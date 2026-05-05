@@ -4,20 +4,24 @@ import logging
 import discord
 import uvicorn
 
-from app.bot.client import DiscordAssistantClient
+from app.bot.client import DiscordAssistantClient, setup_bot_commands
 from app.config import get_settings
+from app.core.database import init_database
 from app.logging_config import configure_logging
 from app.server import create_app
 
 
 async def run() -> None:
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, database_url=settings.database_url)
     logger = logging.getLogger("runtime")
+
+    init_database(settings)
 
     intents = discord.Intents.default()
     intents.guilds = True
-    bot_client = DiscordAssistantClient(intents=intents)
+    bot_client = DiscordAssistantClient(intents=intents, settings=settings)
+    setup_bot_commands(bot_client)
 
     app = create_app(settings=settings, bot_client=bot_client)
     uvicorn_config = uvicorn.Config(

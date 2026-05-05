@@ -6,12 +6,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     discord_bot_token: str
-    discord_guild_id: int | None = None
-    discord_notifications_channel_id: int | None = None
-    github_webhook_secret: str
-    github_repo_owner: str
-    github_repo_name: str
     github_token: str
+    database_url: str
+    llm_api_key: str | None = None
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_model: str = "gpt-4o-mini"
+    llm_timeout_seconds: int = 20
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(
