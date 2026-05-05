@@ -7,6 +7,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    environment:
+      DASHBOARD_API_KEY: ${DASHBOARD_API_KEY}
 
   db:
     image: postgres:16-alpine

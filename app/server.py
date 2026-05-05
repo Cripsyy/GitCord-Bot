@@ -1,6 +1,10 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from app.api.health import router as health_router
+from app.api.dashboard import router as dashboard_router
 from app.api.webhooks import router as webhooks_router
 from app.bot.client import DiscordAssistantClient
 from app.config import Settings
@@ -11,5 +15,23 @@ def create_app(settings: Settings, bot_client: DiscordAssistantClient) -> FastAP
     app.state.settings = settings
     app.state.bot_client = bot_client
     app.include_router(health_router)
+    app.include_router(dashboard_router)
     app.include_router(webhooks_router)
+
+    web_root = Path(__file__).resolve().parent / "web" / "dist"
+    if web_root.exists():
+        @app.get("/dashboard", include_in_schema=False)
+        async def dashboard_index() -> FileResponse:
+            return FileResponse(web_root / "index.html")
+
+        @app.get("/dashboard/", include_in_schema=False)
+        async def dashboard_index_slash() -> FileResponse:
+            return FileResponse(web_root / "index.html")
+
+        @app.get("/dashboard/{full_path:path}", include_in_schema=False)
+        async def dashboard_assets(full_path: str) -> FileResponse:
+            file_path = web_root / full_path
+            if file_path.exists() and file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(web_root / "index.html")
     return app

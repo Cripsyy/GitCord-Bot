@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     llm_timeout_seconds: int = 20
     log_level: str = "INFO"
+    dashboard_api_key: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

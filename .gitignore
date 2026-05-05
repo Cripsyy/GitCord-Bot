@@ -56,3 +56,7 @@ docker-compose.override.yml
 
 # Development plan files
 development_plan.json
+
+# Dashboard build output
+app/web/dist/
+app/web/node_modules/
