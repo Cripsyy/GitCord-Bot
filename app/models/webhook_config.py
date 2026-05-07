@@ -13,11 +13,11 @@ class WebhookConfig(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    guild_id: Mapped[str] = mapped_column(String(32), nullable=False)
     secret_slug: Mapped[str] = mapped_column(String(64), nullable=False)
     webhook_secret: Mapped[str] = mapped_column(String(255), nullable=False)
     repository_full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    channel_id: Mapped[str] = mapped_column(String(32), nullable=False)
     ai_summary_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     ai_max_diff_chars: Mapped[int] = mapped_column(BigInteger, nullable=False, default=12000)
     llm_model: Mapped[str | None] = mapped_column(String(100), nullable=True)

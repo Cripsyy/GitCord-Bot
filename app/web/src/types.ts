@@ -6,7 +6,7 @@ export type Overview = {
 };
 
 export type Guild = {
-  id: number;
+  id: string;
   name: string | null;
   ai_summary_enabled: boolean;
   ai_max_diff_chars: number;
@@ -15,18 +15,18 @@ export type Guild = {
 };
 
 export type Repository = {
-  id: number;
-  guild_id: number;
+  id: string;
   full_name: string;
-  created_at: string | null;
+  private: boolean;
+  html_url: string;
 };
 
 export type WebhookConfig = {
-  id: number;
-  guild_id: number;
+  id: string;
+  guild_id: string;
   secret_slug: string;
   repository_full_name: string;
-  channel_id: number;
+  channel_id: string;
   ai_summary_enabled: boolean;
   ai_max_diff_chars: number;
   llm_model: string | null;
@@ -34,9 +34,9 @@ export type WebhookConfig = {
 };
 
 export type Channel = {
-  id: number;
-  guild_id: number;
-  channel_id: number;
+  id: string;
+  guild_id: string;
+  channel_id: string;
   name: string | null;
   created_at: string | null;
 };

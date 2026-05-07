@@ -4,26 +4,27 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ["Fraunces", "serif"],
-        body: ["Source Sans 3", "system-ui", "sans-serif"],
+        display: ["Space Grotesk", "system-ui", "sans-serif"],
+        body: ["Manrope", "system-ui", "sans-serif"],
       },
       colors: {
-        ink: {
-          900: "#0a0f0c",
-          800: "#0e1712",
-          700: "#132018",
-        },
-        moss: {
-          500: "#66d19e",
-          600: "#3fb481",
-        },
-        sand: {
-          100: "#f4f2ec",
-          200: "#d7dfd2",
+        discord: {
+          950: "#0f1012",
+          900: "#1e1f22",
+          850: "#242528",
+          800: "#2b2d31",
+          750: "#313338",
+          700: "#3c3f45",
+          500: "#b5bac1",
+          200: "#f2f3f5",
+          blurple: "#5865f2",
+          green: "#57f287",
+          yellow: "#fee75c",
+          red: "#ed4245",
         },
       },
       boxShadow: {
-        glow: "0 24px 64px rgba(0,0,0,0.35)",
+        soft: "0 18px 40px rgba(0,0,0,0.28)",
       },
     },
   },

@@ -10,8 +10,8 @@ class WebhookEvent(Base):
     __tablename__ = "webhook_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    guild_id: Mapped[int] = mapped_column(
-        BigInteger,
+    guild_id: Mapped[str] = mapped_column(
+        String(32),
         ForeignKey("guilds.id"),
         nullable=False,
     )

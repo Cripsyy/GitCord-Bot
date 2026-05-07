@@ -10,7 +10,7 @@ def submit_pull_request_review(
     pull_request_number: int,
     decision: str,
     reviewer: str,
-    guild_id: int | None,
+    guild_id: str | None,
 ) -> str:
     if guild_id is None:
         raise ValueError("Guild context is required for PR reviews.")

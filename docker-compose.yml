@@ -7,8 +7,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      DASHBOARD_API_KEY: ${DASHBOARD_API_KEY}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   db:
     image: postgres:16-alpine

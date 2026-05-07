@@ -18,7 +18,7 @@ logger = logging.getLogger("api.webhooks")
 
 
 @router.post("/github/{guild_id}/{secret_slug}", status_code=status.HTTP_202_ACCEPTED)
-async def github_webhook_listener(request: Request, guild_id: int, secret_slug: str) -> dict[str, str]:
+async def github_webhook_listener(request: Request, guild_id: str, secret_slug: str) -> dict[str, str]:
     payload_bytes = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
     event_type = request.headers.get("X-GitHub-Event")
@@ -193,7 +193,7 @@ async def _process_webhook_event(
 def _log_webhook_event(
     settings: Settings,
     *,
-    guild_id: int,
+    guild_id: str,
     webhook_config_id: int | None,
     event_type: str,
     delivery_id: str | None,

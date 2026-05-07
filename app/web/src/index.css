@@ -4,10 +4,6 @@
 
 @layer base {
   body {
-    @apply bg-ink-900 text-sand-100 font-body;
-    background-image:
-      radial-gradient(1200px 700px at 10% 10%, rgba(32, 59, 42, 0.8), transparent 60%),
-      radial-gradient(900px 600px at 90% 20%, rgba(15, 38, 32, 0.8), transparent 55%),
-      linear-gradient(160deg, #0a0f0c 0%, #0d1813 45%, #0a0f0c 100%);
+    @apply bg-discord-900 text-discord-200 font-body;
   }
 }

@@ -1,43 +1,123 @@
 from fastapi import APIRouter, HTTPException, Request, status
 
+import secrets
+import re
+
 from app.config import Settings
 from app.core.database import get_session
 from app.models.channel import ChannelConfig
 from app.models.guild import GuildConfig
-from app.models.repository import RepositoryConfig
 from app.models.webhook_config import WebhookConfig
+from app.services.oauth_clients import fetch_discord_identity, fetch_github_repos
+from app.services.oauth_tokens import get_oauth_token
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
-def _require_key(request: Request) -> None:
+def _get_session(request: Request) -> dict[str, bool]:
     settings: Settings = request.app.state.settings
-    if not settings.dashboard_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Dashboard API key is not configured",
+    discord_user_id = request.cookies.get("discord_user_id")
+    github_user_id = request.cookies.get("github_user_id")
+
+    discord_connected = False
+    github_connected = False
+
+    if discord_user_id:
+        discord_connected = (
+            get_oauth_token(settings, provider="discord", subject_id=discord_user_id) is not None
         )
-    provided = request.headers.get("X-Dashboard-Key")
-    if not provided or provided != settings.dashboard_api_key:
+    if github_user_id:
+        github_connected = (
+            get_oauth_token(settings, provider="github", subject_id=github_user_id) is not None
+        )
+
+    return {
+        "discord_connected": discord_connected,
+        "github_connected": github_connected,
+    }
+
+
+def _require_session(request: Request) -> dict[str, bool]:
+    session_info = _get_session(request)
+    if not session_info["discord_connected"] and not session_info["github_connected"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid dashboard key",
+            detail="OAuth login required",
         )
+    return session_info
+
+
+def _require_full_session(request: Request) -> dict[str, bool]:
+    session_info = _get_session(request)
+    if not session_info["discord_connected"] or not session_info["github_connected"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Discord and GitHub OAuth required",
+        )
+    return session_info
+
+
+def _slugify(value: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9-]+", "-", value)
+    cleaned = re.sub(r"-+", "-", cleaned).strip("-")
+    return cleaned.lower() or "repo"
+
+
+@router.get("/session")
+async def get_session_info(request: Request) -> dict[str, bool]:
+    return _get_session(request)
+
+
+@router.get("/profile")
+async def get_profile(request: Request) -> dict[str, object | None]:
+    settings: Settings = request.app.state.settings
+    discord_user_id = request.cookies.get("discord_user_id")
+
+    if not discord_user_id:
+        return {"discord": None}
+
+    token = get_oauth_token(settings, provider="discord", subject_id=discord_user_id)
+    if token is None:
+        return {"discord": None}
+
+    identity = await fetch_discord_identity(token.access_token)
+    user_id = str(identity.get("id") or discord_user_id)
+    avatar_hash = identity.get("avatar")
+    if avatar_hash:
+        avatar_url = f"https://cdn.discordapp.com/avatars/{user_id}/{avatar_hash}.png?size=128"
+    else:
+        discriminator = str(identity.get("discriminator") or "0")
+        avatar_url = f"https://cdn.discordapp.com/embed/avatars/{int(discriminator) % 5}.png"
+
+    username = identity.get("global_name") or identity.get("username") or "Discord User"
+    return {
+        "discord": {
+            "id": user_id,
+            "username": username,
+            "avatar_url": avatar_url,
+        }
+    }
 
 
 @router.get("/overview")
 async def dashboard_overview(request: Request) -> dict[str, int]:
-    _require_key(request)
+    _require_full_session(request)
     settings: Settings = request.app.state.settings
+    github_user_id = request.cookies.get("github_user_id")
+    repo_count = 0
+    if github_user_id:
+        token = get_oauth_token(settings, provider="github", subject_id=github_user_id)
+        if token:
+            repos = await fetch_github_repos(token.access_token)
+            repo_count = len(repos)
     for session in get_session(settings):
         guilds = session.query(GuildConfig).count()
-        repos = session.query(RepositoryConfig).count()
         channels = session.query(ChannelConfig).count()
         webhooks = session.query(WebhookConfig).count()
         break
     return {
         "guilds": guilds,
-        "repositories": repos,
+        "repositories": repo_count,
         "channels": channels,
         "webhook_configs": webhooks,
     }
@@ -45,14 +125,14 @@ async def dashboard_overview(request: Request) -> dict[str, int]:
 
 @router.get("/guilds")
 async def list_guilds(request: Request) -> list[dict[str, object]]:
-    _require_key(request)
+    _require_full_session(request)
     settings: Settings = request.app.state.settings
     for session in get_session(settings):
         guilds = session.query(GuildConfig).order_by(GuildConfig.created_at.desc()).all()
         break
     return [
         {
-            "id": guild.id,
+            "id": str(guild.id),
             "name": guild.name,
             "ai_summary_enabled": guild.ai_summary_enabled,
             "ai_max_diff_chars": guild.ai_max_diff_chars,
@@ -65,18 +145,18 @@ async def list_guilds(request: Request) -> list[dict[str, object]]:
 
 @router.get("/webhooks")
 async def list_webhooks(request: Request) -> list[dict[str, object]]:
-    _require_key(request)
+    _require_full_session(request)
     settings: Settings = request.app.state.settings
     for session in get_session(settings):
         webhooks = session.query(WebhookConfig).order_by(WebhookConfig.created_at.desc()).all()
         break
     return [
         {
-            "id": webhook.id,
-            "guild_id": webhook.guild_id,
+            "id": str(webhook.id),
+            "guild_id": str(webhook.guild_id),
             "secret_slug": webhook.secret_slug,
             "repository_full_name": webhook.repository_full_name,
-            "channel_id": webhook.channel_id,
+            "channel_id": str(webhook.channel_id),
             "ai_summary_enabled": webhook.ai_summary_enabled,
             "ai_max_diff_chars": webhook.ai_max_diff_chars,
             "llm_model": webhook.llm_model,
@@ -88,14 +168,14 @@ async def list_webhooks(request: Request) -> list[dict[str, object]]:
 
 @router.post("/webhooks", status_code=status.HTTP_201_CREATED)
 async def create_webhook(request: Request, payload: dict[str, object]) -> dict[str, object]:
-    _require_key(request)
+    _require_full_session(request)
     settings: Settings = request.app.state.settings
 
-    guild_id = int(payload.get("guild_id") or 0)
+    guild_id = str(payload.get("guild_id") or "").strip()
     secret_slug = str(payload.get("secret_slug") or "").strip()
     webhook_secret = str(payload.get("webhook_secret") or "").strip()
     repository_full_name = str(payload.get("repository_full_name") or "").strip()
-    channel_id = int(payload.get("channel_id") or 0)
+    channel_id = str(payload.get("channel_id") or "").strip()
     ai_summary_enabled = bool(payload.get("ai_summary_enabled", True))
     ai_max_diff_chars = int(payload.get("ai_max_diff_chars") or 12000)
     llm_model = payload.get("llm_model")
@@ -143,11 +223,11 @@ async def create_webhook(request: Request, payload: dict[str, object]) -> dict[s
         session.commit()
         session.refresh(webhook)
         return {
-            "id": webhook.id,
-            "guild_id": webhook.guild_id,
+            "id": str(webhook.id),
+            "guild_id": str(webhook.guild_id),
             "secret_slug": webhook.secret_slug,
             "repository_full_name": webhook.repository_full_name,
-            "channel_id": webhook.channel_id,
+            "channel_id": str(webhook.channel_id),
             "ai_summary_enabled": webhook.ai_summary_enabled,
             "ai_max_diff_chars": webhook.ai_max_diff_chars,
             "llm_model": webhook.llm_model,
@@ -156,11 +236,11 @@ async def create_webhook(request: Request, payload: dict[str, object]) -> dict[s
 
 
 @router.delete("/webhooks/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_webhook(request: Request, webhook_id: int) -> None:
-    _require_key(request)
+async def delete_webhook(request: Request, webhook_id: str) -> None:
+    _require_full_session(request)
     settings: Settings = request.app.state.settings
     for session in get_session(settings):
-        webhook = session.get(WebhookConfig, webhook_id)
+        webhook = session.get(WebhookConfig, int(webhook_id))
         if webhook is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
         session.delete(webhook)
@@ -171,16 +251,18 @@ async def delete_webhook(request: Request, webhook_id: int) -> None:
 
 @router.get("/channels")
 async def list_channels(request: Request) -> list[dict[str, object]]:
-    _require_key(request)
+    _require_full_session(request)
     settings: Settings = request.app.state.settings
+    bot_client = request.app.state.bot_client
+    await bot_client.sync_guild_channels()
     for session in get_session(settings):
         channels = session.query(ChannelConfig).order_by(ChannelConfig.created_at.desc()).all()
         break
     return [
         {
-            "id": channel.id,
-            "guild_id": channel.guild_id,
-            "channel_id": channel.channel_id,
+            "id": str(channel.id),
+            "guild_id": str(channel.guild_id),
+            "channel_id": str(channel.channel_id),
             "name": channel.name,
             "created_at": channel.created_at.isoformat() if channel.created_at else None,
         }
@@ -190,17 +272,85 @@ async def list_channels(request: Request) -> list[dict[str, object]]:
 
 @router.get("/repositories")
 async def list_repositories(request: Request) -> list[dict[str, object]]:
-    _require_key(request)
+    _require_full_session(request)
     settings: Settings = request.app.state.settings
-    for session in get_session(settings):
-        repos = session.query(RepositoryConfig).order_by(RepositoryConfig.created_at.desc()).all()
-        break
+    github_user_id = request.cookies.get("github_user_id")
+    if not github_user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="GitHub OAuth required")
+    token = get_oauth_token(settings, provider="github", subject_id=github_user_id)
+    if token is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="GitHub OAuth required")
+    repos = await fetch_github_repos(token.access_token)
     return [
         {
-            "id": repo.id,
-            "guild_id": repo.guild_id,
-            "full_name": repo.full_name,
-            "created_at": repo.created_at.isoformat() if repo.created_at else None,
+            "id": str(repo.get("id")) if repo.get("id") is not None else None,
+            "full_name": repo.get("full_name"),
+            "private": repo.get("private"),
+            "html_url": repo.get("html_url"),
         }
         for repo in repos
+        if repo.get("full_name")
     ]
+
+
+@router.post("/subscriptions")
+async def update_subscriptions(request: Request, payload: dict[str, object]) -> dict[str, object]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+
+    guild_id = str(payload.get("guild_id") or "").strip()
+    channel_id = str(payload.get("channel_id") or "").strip()
+    repositories = payload.get("repositories")
+    if not guild_id or not channel_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="guild_id and channel_id required")
+    if not isinstance(repositories, list) or not repositories:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="repositories required")
+
+    repo_list = sorted({str(repo).strip() for repo in repositories if str(repo).strip()})
+    if not repo_list:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="repositories required")
+
+    webhook_url_base = settings.oauth_redirect_base_url.rstrip("/")
+
+    results: list[dict[str, object]] = []
+    for session in get_session(settings):
+        existing = (
+            session.query(WebhookConfig)
+            .filter(WebhookConfig.guild_id == guild_id)
+            .all()
+        )
+        existing_by_repo = {wh.repository_full_name: wh for wh in existing}
+
+        for webhook in existing:
+            if webhook.repository_full_name not in repo_list:
+                session.delete(webhook)
+
+        for repo_full_name in repo_list:
+            webhook = existing_by_repo.get(repo_full_name)
+            if webhook is None:
+                secret_slug = f"{_slugify(repo_full_name)}-{secrets.token_urlsafe(6)}"
+                webhook_secret = secrets.token_urlsafe(32)
+                webhook = WebhookConfig(
+                    guild_id=guild_id,
+                    secret_slug=secret_slug,
+                    webhook_secret=webhook_secret,
+                    repository_full_name=repo_full_name,
+                    channel_id=channel_id,
+                    ai_summary_enabled=True,
+                )
+                session.add(webhook)
+            else:
+                webhook.channel_id = channel_id
+            results.append(
+                {
+                    "repository_full_name": repo_full_name,
+                    "channel_id": str(channel_id),
+                    "secret_slug": webhook.secret_slug,
+                    "webhook_url": f"{webhook_url_base}/webhooks/github/{guild_id}/{webhook.secret_slug}",
+                }
+            )
+
+        session.commit()
+        break
+
+    return {"subscriptions": results}
