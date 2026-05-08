@@ -8,6 +8,7 @@ from app.core.database import get_session
 from app.models.channel import ChannelConfig
 from app.models.guild import GuildConfig
 from app.models.webhook_config import WebhookConfig
+from app.services.github_webhooks import delete_github_webhook, ensure_github_webhook
 from app.services.oauth_clients import fetch_discord_identity, fetch_github_repos
 from app.services.oauth_tokens import get_oauth_token
 
@@ -239,10 +240,31 @@ async def create_webhook(request: Request, payload: dict[str, object]) -> dict[s
 async def delete_webhook(request: Request, webhook_id: str) -> None:
     _require_full_session(request)
     settings: Settings = request.app.state.settings
+    github_user_id = request.cookies.get("github_user_id")
+    github_token = None
+    if github_user_id:
+        github_token = get_oauth_token(settings, provider="github", subject_id=github_user_id)
     for session in get_session(settings):
         webhook = session.get(WebhookConfig, int(webhook_id))
         if webhook is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+        if github_token is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="GitHub OAuth required")
+        webhook_url_base = settings.oauth_redirect_base_url.rstrip("/")
+        webhook_url = f"{webhook_url_base}/webhooks/github/{webhook.guild_id}/{webhook.secret_slug}"
+        webhook_url_prefix = f"{webhook_url_base}/webhooks/github/{webhook.guild_id}/"
+        try:
+            await delete_github_webhook(
+                access_token=github_token.access_token,
+                repo_full_name=webhook.repository_full_name,
+                webhook_url=webhook_url,
+                url_prefix=webhook_url_prefix,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to remove GitHub webhook for {webhook.repository_full_name}: {exc}",
+            ) from exc
         session.delete(webhook)
         session.commit()
         return None
@@ -298,6 +320,13 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
     _require_full_session(request)
     settings: Settings = request.app.state.settings
 
+    github_user_id = request.cookies.get("github_user_id")
+    if not github_user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="GitHub OAuth required")
+    github_token = get_oauth_token(settings, provider="github", subject_id=github_user_id)
+    if github_token is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="GitHub OAuth required")
+
     guild_id = str(payload.get("guild_id") or "").strip()
     channel_id = str(payload.get("channel_id") or "").strip()
     repositories = payload.get("repositories")
@@ -311,6 +340,7 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="repositories required")
 
     webhook_url_base = settings.oauth_redirect_base_url.rstrip("/")
+    webhook_url_prefix = f"{webhook_url_base}/webhooks/github/{guild_id}/"
 
     results: list[dict[str, object]] = []
     for session in get_session(settings):
@@ -323,6 +353,19 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
 
         for webhook in existing:
             if webhook.repository_full_name not in repo_list:
+                webhook_url = f"{webhook_url_base}/webhooks/github/{guild_id}/{webhook.secret_slug}"
+                try:
+                    await delete_github_webhook(
+                        access_token=github_token.access_token,
+                        repo_full_name=webhook.repository_full_name,
+                        webhook_url=webhook_url,
+                        url_prefix=webhook_url_prefix,
+                    )
+                except Exception as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Failed to remove GitHub webhook for {webhook.repository_full_name}: {exc}",
+                    ) from exc
                 session.delete(webhook)
 
         for repo_full_name in repo_list:
@@ -341,12 +384,28 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
                 session.add(webhook)
             else:
                 webhook.channel_id = channel_id
+            webhook_url = f"{webhook_url_base}/webhooks/github/{guild_id}/{webhook.secret_slug}"
+            try:
+                github_result = await ensure_github_webhook(
+                    access_token=github_token.access_token,
+                    repo_full_name=repo_full_name,
+                    webhook_url=webhook_url,
+                    webhook_secret=webhook.webhook_secret,
+                    events=["push", "pull_request", "issues"],
+                    url_prefix=webhook_url_prefix,
+                )
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Failed to sync GitHub webhook for {repo_full_name}: {exc}",
+                ) from exc
             results.append(
                 {
                     "repository_full_name": repo_full_name,
                     "channel_id": str(channel_id),
                     "secret_slug": webhook.secret_slug,
-                    "webhook_url": f"{webhook_url_base}/webhooks/github/{guild_id}/{webhook.secret_slug}",
+                    "webhook_url": webhook_url,
+                    "github_hook": github_result,
                 }
             )
 

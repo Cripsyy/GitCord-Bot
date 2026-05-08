@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Boolean, DateTime, String, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
@@ -25,4 +25,9 @@ class WebhookConfig(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+    events: Mapped[list["WebhookEvent"]] = relationship(
+        "WebhookEvent",
+        back_populates="config",
+        cascade="all, delete-orphan"
     )

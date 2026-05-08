@@ -42,6 +42,7 @@ function App() {
   const [guildMenuOpen, setGuildMenuOpen] = useState(false);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const [repoMenuOpen, setRepoMenuOpen] = useState(false);
+  const [webhookStatus, setWebhookStatus] = useState("Ready");
 
   const headers = useMemo(() => {
     return {};
@@ -128,6 +129,28 @@ function App() {
       await loadDashboard();
     } catch (error) {
       setRepoStatus(`Error: ${(error as Error).message}`);
+    }
+  }
+
+  async function handleDeleteWebhook(webhookId: string) {
+    const confirmed = window.confirm("Delete this webhook configuration?");
+    if (!confirmed) {
+      return;
+    }
+    setWebhookStatus("Deleting...");
+    try {
+      const response = await fetch(`/api/dashboard/webhooks/${webhookId}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || response.statusText);
+      }
+      setWebhookStatus("Deleted");
+      await loadDashboard();
+    } catch (error) {
+      setWebhookStatus(`Error: ${(error as Error).message}`);
     }
   }
 
@@ -283,112 +306,6 @@ function App() {
               ))}
             </section>
 
-            <section className="grid gap-5 xl:grid-cols-2">
-              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-display text-lg text-discord-200">Guilds</h2>
-                  <span className="text-xs text-discord-500">Latest 12</span>
-                </div>
-                <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
-                  {data.guilds.length ? (
-                    data.guilds.map((guild) => (
-                      <div
-                        key={guild.id}
-                        className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
-                      >
-                        <p className="text-sm font-semibold text-discord-200">
-                          {guild.name ?? "Unnamed guild"}
-                        </p>
-                        <p className="text-xs text-discord-500">ID: {guild.id}</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-discord-500">No data yet.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-display text-lg text-discord-200">Repositories</h2>
-                  <span className="text-xs text-discord-500">GitHub</span>
-                </div>
-                <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
-                  {data.repositories.length ? (
-                    data.repositories.map((repo) => (
-                      <div
-                        key={repo.id}
-                        className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
-                      >
-                        <p className="text-sm font-semibold text-discord-200">{repo.full_name}</p>
-                        <p className="text-xs text-discord-500">
-                          {repo.private ? "Private" : "Public"}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-discord-500">
-                      Connect Discord + GitHub to list repositories.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <section className="grid gap-5 xl:grid-cols-2">
-              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-display text-lg text-discord-200">Webhook Configs</h2>
-                  <span className="text-xs text-discord-500">Latest 12</span>
-                </div>
-                <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
-                  {data.webhooks.length ? (
-                    data.webhooks.map((webhook) => (
-                      <div
-                        key={webhook.id}
-                        className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
-                      >
-                        <p className="text-sm font-semibold text-discord-200">
-                          {webhook.repository_full_name} → {webhook.channel_id}
-                        </p>
-                        <p className="text-xs text-discord-500">
-                          Slug: {webhook.secret_slug} | ID: {webhook.id}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-discord-500">No data yet.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-display text-lg text-discord-200">Channels</h2>
-                  <span className="text-xs text-discord-500">Latest 12</span>
-                </div>
-                <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
-                  {data.channels.length ? (
-                    data.channels.map((channel) => (
-                      <div
-                        key={channel.id}
-                        className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
-                      >
-                        <p className="text-sm font-semibold text-discord-200">
-                          {channel.name ?? "Unnamed channel"}
-                        </p>
-                        <p className="text-xs text-discord-500">
-                          ID: {channel.channel_id}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-discord-500">No data yet.</p>
-                  )}
-                </div>
-              </div>
-            </section>
-
             <section className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -452,6 +369,16 @@ function App() {
                                 type="button"
                                 onClick={() => {
                                   setSelectedGuild(String(guild.id));
+                                  if (
+                                    selectedChannel &&
+                                    !data.channels.some(
+                                      (channel) =>
+                                        String(channel.channel_id) === selectedChannel &&
+                                        String(channel.guild_id) === String(guild.id)
+                                    )
+                                  ) {
+                                    setSelectedChannel("");
+                                  }
                                   setGuildMenuOpen(false);
                                 }}
                                 className="w-full rounded-md px-2 py-2 text-left text-sm text-discord-200 hover:bg-discord-850"
@@ -517,6 +444,7 @@ function App() {
                                 type="button"
                                 onClick={() => {
                                   setSelectedChannel(String(channel.channel_id));
+                                  setSelectedGuild(String(channel.guild_id));
                                   setChannelMenuOpen(false);
                                 }}
                                 className="w-full rounded-md px-2 py-2 text-left text-sm text-discord-200 hover:bg-discord-850"
@@ -590,6 +518,126 @@ function App() {
                 </label>
               </div>
             </section>
+
+            <section className="grid gap-5 xl:grid-cols-2">
+              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display text-lg text-discord-200">Guilds</h2>
+                  <span className="text-xs text-discord-500">Latest 12</span>
+                </div>
+                <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
+                  {data.guilds.length ? (
+                    data.guilds.map((guild) => (
+                      <div
+                        key={guild.id}
+                        className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                      >
+                        <p className="text-sm font-semibold text-discord-200">
+                          {guild.name ?? "Unnamed guild"}
+                        </p>
+                        <p className="text-xs text-discord-500">ID: {guild.id}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-discord-500">No data yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display text-lg text-discord-200">Repositories</h2>
+                  <span className="text-xs text-discord-500">GitHub</span>
+                </div>
+                <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
+                  {data.repositories.length ? (
+                    data.repositories.map((repo) => (
+                      <div
+                        key={repo.id}
+                        className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                      >
+                        <p className="text-sm font-semibold text-discord-200">{repo.full_name}</p>
+                        <p className="text-xs text-discord-500">
+                          {repo.private ? "Private" : "Public"}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-discord-500">
+                      Connect Discord + GitHub to list repositories.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-5 xl:grid-cols-2">
+              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display text-lg text-discord-200">Webhook Configs</h2>
+                  <span className="text-xs text-discord-500">{webhookStatus}</span>
+                </div>
+                <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
+                  {data.webhooks.length ? (
+                    data.webhooks.map((webhook) => (
+                      <div
+                        key={webhook.id}
+                        className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-discord-200">
+                              {webhook.repository_full_name} → {webhook.channel_id}
+                            </p>
+                            <p className="text-xs text-discord-500">
+                              Slug: {webhook.secret_slug} | ID: {webhook.id}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteWebhook(webhook.id)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-discord-850 text-sm text-discord-500 hover:text-discord-200"
+                            aria-label="Delete webhook"
+                            title="Delete webhook"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-discord-500">No data yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display text-lg text-discord-200">Channels</h2>
+                  <span className="text-xs text-discord-500">Latest 12</span>
+                </div>
+                <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
+                  {data.channels.length ? (
+                    data.channels.map((channel) => (
+                      <div
+                        key={channel.id}
+                        className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                      >
+                        <p className="text-sm font-semibold text-discord-200">
+                          {channel.name ?? "Unnamed channel"}
+                        </p>
+                        <p className="text-xs text-discord-500">
+                          ID: {channel.channel_id}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-discord-500">No data yet.</p>
+                  )}
+                </div>
+              </div>
+            </section>
+
           </main>
         </div>
       </div>
