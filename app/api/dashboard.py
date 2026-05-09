@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request, status
 
+import discord
 import secrets
 import re
 
@@ -137,7 +138,6 @@ async def list_guilds(request: Request) -> list[dict[str, object]]:
             "name": guild.name,
             "ai_summary_enabled": guild.ai_summary_enabled,
             "ai_max_diff_chars": guild.ai_max_diff_chars,
-            "llm_model": guild.llm_model,
             "created_at": guild.created_at.isoformat() if guild.created_at else None,
         }
         for guild in guilds
@@ -160,11 +160,26 @@ async def list_webhooks(request: Request) -> list[dict[str, object]]:
             "channel_id": str(webhook.channel_id),
             "ai_summary_enabled": webhook.ai_summary_enabled,
             "ai_max_diff_chars": webhook.ai_max_diff_chars,
-            "llm_model": webhook.llm_model,
+            "events": webhook.events,
             "created_at": webhook.created_at.isoformat() if webhook.created_at else None,
         }
         for webhook in webhooks
     ]
+
+
+def _make_unique_slug(session, guild_id: str, desired_slug: str) -> str:
+    candidate = desired_slug
+    while (
+        session.query(WebhookConfig)
+        .filter(
+            WebhookConfig.guild_id == guild_id,
+            WebhookConfig.secret_slug == candidate,
+        )
+        .first()
+        is not None
+    ):
+        candidate = f"{desired_slug}-{secrets.token_hex(3)}"
+    return candidate
 
 
 @router.post("/webhooks", status_code=status.HTTP_201_CREATED)
@@ -173,18 +188,17 @@ async def create_webhook(request: Request, payload: dict[str, object]) -> dict[s
     settings: Settings = request.app.state.settings
 
     guild_id = str(payload.get("guild_id") or "").strip()
-    secret_slug = str(payload.get("secret_slug") or "").strip()
-    webhook_secret = str(payload.get("webhook_secret") or "").strip()
     repository_full_name = str(payload.get("repository_full_name") or "").strip()
     channel_id = str(payload.get("channel_id") or "").strip()
     ai_summary_enabled = bool(payload.get("ai_summary_enabled", True))
     ai_max_diff_chars = int(payload.get("ai_max_diff_chars") or 12000)
-    llm_model = payload.get("llm_model")
+    raw_events = payload.get("events")
+    events = raw_events if isinstance(raw_events, list) else ["push", "pull_request", "issues"]
 
-    if not guild_id or not secret_slug or not webhook_secret:
+    if not guild_id:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="guild_id, secret_slug, and webhook_secret are required",
+            detail="guild_id is required",
         )
 
     if not repository_full_name or not channel_id:
@@ -193,34 +207,102 @@ async def create_webhook(request: Request, payload: dict[str, object]) -> dict[s
             detail="repository_full_name and channel_id are required",
         )
 
+    github_user_id = request.cookies.get("github_user_id")
+    github_token = None
+    if github_user_id:
+        github_token = get_oauth_token(settings, provider="github", subject_id=github_user_id)
+
+    webhook_url_base = settings.oauth_redirect_base_url.rstrip("/")
+
     for session in get_session(settings):
-        webhook = (
-            session.query(WebhookConfig)
-            .filter(
-                WebhookConfig.guild_id == guild_id,
-                WebhookConfig.secret_slug == secret_slug,
-            )
-            .one_or_none()
+        repo_slug = _slugify(repository_full_name)
+        secret_slug = _make_unique_slug(session, guild_id, f"{repo_slug}-{secrets.token_hex(3)}")
+        webhook_secret = secrets.token_urlsafe(32)
+        webhook = WebhookConfig(
+            guild_id=guild_id,
+            secret_slug=secret_slug,
+            webhook_secret=webhook_secret,
+            repository_full_name=repository_full_name,
+            channel_id=channel_id,
+            ai_summary_enabled=ai_summary_enabled,
+            ai_max_diff_chars=ai_max_diff_chars,
+            events=events,
         )
+        session.add(webhook)
+        session.commit()
+        session.refresh(webhook)
+
+        if github_token:
+            webhook_url = f"{webhook_url_base}/webhooks/github/{guild_id}/{secret_slug}"
+            webhook_url_prefix = f"{webhook_url_base}/webhooks/github/{guild_id}/"
+            try:
+                await ensure_github_webhook(
+                    access_token=github_token.access_token,
+                    repo_full_name=repository_full_name,
+                    webhook_url=webhook_url,
+                    webhook_secret=webhook_secret,
+                    events=events,
+                    url_prefix=webhook_url_prefix,
+                )
+            except Exception:
+                pass
+
+        return {
+            "id": str(webhook.id),
+            "guild_id": str(webhook.guild_id),
+            "secret_slug": webhook.secret_slug,
+            "repository_full_name": webhook.repository_full_name,
+            "channel_id": str(webhook.channel_id),
+            "ai_summary_enabled": webhook.ai_summary_enabled,
+            "ai_max_diff_chars": webhook.ai_max_diff_chars,
+            "events": webhook.events,
+        }
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+@router.put("/webhooks/{webhook_id}")
+async def update_webhook(request: Request, webhook_id: str, payload: dict[str, object]) -> dict[str, object]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+
+    repository_full_name = payload.get("repository_full_name")
+    channel_id = payload.get("channel_id")
+    ai_summary_enabled = payload.get("ai_summary_enabled")
+    ai_max_diff_chars = payload.get("ai_max_diff_chars")
+    raw_events = payload.get("events")
+
+    for session in get_session(settings):
+        webhook = session.get(WebhookConfig, int(webhook_id))
         if webhook is None:
-            webhook = WebhookConfig(
-                guild_id=guild_id,
-                secret_slug=secret_slug,
-                webhook_secret=webhook_secret,
-                repository_full_name=repository_full_name,
-                channel_id=channel_id,
-                ai_summary_enabled=ai_summary_enabled,
-                ai_max_diff_chars=ai_max_diff_chars,
-                llm_model=llm_model if isinstance(llm_model, str) else None,
-            )
-            session.add(webhook)
-        else:
-            webhook.webhook_secret = webhook_secret
-            webhook.repository_full_name = repository_full_name
-            webhook.channel_id = channel_id
-            webhook.ai_summary_enabled = ai_summary_enabled
-            webhook.ai_max_diff_chars = ai_max_diff_chars
-            webhook.llm_model = llm_model if isinstance(llm_model, str) else None
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+        if repository_full_name is not None:
+            repo_value = str(repository_full_name).strip()
+            if not repo_value:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="repository_full_name cannot be empty",
+                )
+            webhook.repository_full_name = repo_value
+
+        if channel_id is not None:
+            channel_value = str(channel_id).strip()
+            if not channel_value:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="channel_id cannot be empty",
+                )
+            webhook.channel_id = channel_value
+
+        if ai_summary_enabled is not None:
+            webhook.ai_summary_enabled = bool(ai_summary_enabled)
+
+        if ai_max_diff_chars is not None:
+            webhook.ai_max_diff_chars = int(ai_max_diff_chars)
+
+        if raw_events is not None and isinstance(raw_events, list):
+            webhook.events = raw_events
+
         session.commit()
         session.refresh(webhook)
         return {
@@ -231,8 +313,35 @@ async def create_webhook(request: Request, payload: dict[str, object]) -> dict[s
             "channel_id": str(webhook.channel_id),
             "ai_summary_enabled": webhook.ai_summary_enabled,
             "ai_max_diff_chars": webhook.ai_max_diff_chars,
-            "llm_model": webhook.llm_model,
+            "events": webhook.events,
         }
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+@router.post("/webhooks/{webhook_id}/test", status_code=status.HTTP_202_ACCEPTED)
+async def send_test_webhook_message(request: Request, webhook_id: str, payload: dict[str, object]) -> dict[str, str]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+    bot_client = request.app.state.bot_client
+
+    message_text = str(payload.get("message", "")).strip()
+    if not message_text:
+        message_text = "Test message from the GitCord dashboard."
+
+    for session in get_session(settings):
+        webhook = session.get(WebhookConfig, int(webhook_id))
+        if webhook is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+        embed = discord.Embed(
+            title="Webhook Test",
+            description=message_text,
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(name="Repository", value=webhook.repository_full_name, inline=False)
+        embed.add_field(name="Channel ID", value=str(webhook.channel_id), inline=False)
+        await bot_client.send_embed_to_channel(webhook.channel_id, embed)
+        return {"status": "sent"}
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
 
 
@@ -391,7 +500,7 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
                     repo_full_name=repo_full_name,
                     webhook_url=webhook_url,
                     webhook_secret=webhook.webhook_secret,
-                    events=["push", "pull_request", "issues"],
+                    events=webhook.events or ["push", "pull_request", "issues"],
                     url_prefix=webhook_url_prefix,
                 )
             except Exception as exc:

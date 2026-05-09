@@ -1,0 +1,232 @@
+import { useEffect, useMemo, useState } from "react";
+import type { Channel, Guild, Overview, Repository, WebhookConfig } from "../types";
+import Navbar from "../components/Navbar";
+
+type DashboardState = {
+  overview: Overview | null;
+  guilds: Guild[];
+  repositories: Repository[];
+  webhooks: WebhookConfig[];
+  channels: Channel[];
+};
+
+const emptyState: DashboardState = {
+  overview: null,
+  guilds: [],
+  repositories: [],
+  webhooks: [],
+  channels: [],
+};
+
+function Dashboard() {
+  const [status, setStatus] = useState("Loading...");
+  const [data, setData] = useState<DashboardState>(emptyState);
+
+  const headers = useMemo(() => ({}), []);
+
+  async function fetchJson<T>(path: string): Promise<T> {
+    const response = await fetch(path, { headers });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || response.statusText);
+    }
+    return response.json() as Promise<T>;
+  }
+
+  async function loadDashboard() {
+    setStatus("Loading data...");
+    try {
+      const [overview, guilds, repositories, webhooks, channels] = await Promise.all([
+        fetchJson<Overview>("/api/dashboard/overview"),
+        fetchJson<Guild[]>("/api/dashboard/guilds"),
+        fetchJson<Repository[]>("/api/dashboard/repositories"),
+        fetchJson<WebhookConfig[]>("/api/dashboard/webhooks"),
+        fetchJson<Channel[]>("/api/dashboard/channels"),
+      ]);
+      setData({ overview, guilds, repositories, webhooks, channels });
+      setStatus("Live");
+    } catch (error) {
+      setStatus(`Error: ${(error as Error).message}`);
+    }
+  }
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      <Navbar title="Server Dashboard" />
+
+      <main className="flex-1 space-y-6 px-6 py-6">
+        <section className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-4 shadow-soft">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="font-display text-lg text-discord-200">Dashboard Access</h2>
+              <p className="text-sm text-discord-500">{status}</p>
+            </div>
+            <button
+              type="button"
+              onClick={loadDashboard}
+              className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white"
+            >
+              Load Dashboard
+            </button>
+          </div>
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "Guilds", value: data.overview?.guilds ?? 0 },
+            { label: "Repositories", value: data.overview?.repositories ?? 0 },
+            { label: "Channels", value: data.overview?.channels ?? 0 },
+            { label: "Webhooks", value: data.overview?.webhook_configs ?? 0 },
+          ].map((card) => (
+            <div
+              key={card.label}
+              className="rounded-2xl border border-white/5 bg-discord-850 px-4 py-4"
+            >
+              <p className="text-xs uppercase tracking-[0.3em] text-discord-500">
+                {card.label}
+              </p>
+              <p className="mt-3 font-display text-2xl text-discord-200">{card.value}</p>
+            </div>
+          ))}
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-2">
+          <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-lg text-discord-200">Guilds</h2>
+            </div>
+            <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
+              {data.guilds.length ? (
+                data.guilds.map((guild) => (
+                  <div
+                    key={guild.id}
+                    className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                  >
+                    <p className="text-sm font-semibold text-discord-200">
+                      {guild.name ?? "Unnamed guild"}
+                    </p>
+                    <p className="text-xs text-discord-500">ID: {guild.id}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-discord-500">No data yet.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-lg text-discord-200">Repositories</h2>
+            </div>
+            <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
+              {data.repositories.length ? (
+                data.repositories.map((repo) => (
+                  <div
+                    key={repo.id}
+                    className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                  >
+                    <p className="text-sm font-semibold text-discord-200">{repo.full_name}</p>
+                    <p className="text-xs text-discord-500">
+                      {repo.private ? "Private" : "Public"}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-discord-500">
+                  Connect Discord + GitHub to list repositories.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-2">
+          <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-lg text-discord-200">Webhook Configs</h2>
+              <a
+                href="/configurations"
+                className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white"
+              >
+                Manage Configurations
+              </a>
+            </div>
+            <div className="mt-4 max-h-48 space-y-3 overflow-y-auto pr-2">
+              {data.webhooks.length ? (
+                data.webhooks.map((webhook) => {
+                  const guildName = data.guilds.find(
+                    (g) => String(g.id) === webhook.guild_id
+                  )?.name;
+                  const channelName = data.channels.find(
+                    (c) => String(c.channel_id) === webhook.channel_id
+                  )?.name;
+                  return (
+                    <div
+                      key={webhook.id}
+                      className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                    >
+                      <p className="text-sm font-semibold truncate text-discord-200">
+                        {webhook.repository_full_name}
+                      </p>
+                      <p className="text-xs text-discord-400">
+                        {guildName ?? `Guild ${webhook.guild_id}`} → {channelName ?? `Channel ${webhook.channel_id}`}
+                      </p>
+                      <p className="text-xs text-discord-500">
+                        Slug: {webhook.secret_slug} | Events: {webhook.events?.join(", ") ?? "push, pull_request, issues"}
+                      </p>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-discord-500">
+                  No webhook configs yet.{" "}
+                  <a href="/configurations" className="text-discord-blurple underline">
+                    Create one
+                  </a>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-lg text-discord-200">Channels</h2>
+            </div>
+            <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
+              {data.channels.length ? (
+                data.channels.map((channel) => {
+                  const guildName = data.guilds.find(
+                    (g) => String(g.id) === channel.guild_id
+                  )?.name;
+                  return (
+                    <div
+                      key={channel.id}
+                      className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                    >
+                      <p className="text-sm font-semibold text-discord-200">
+                        {channel.name ?? "Unnamed channel"}
+                      </p>
+                      <p className="text-xs text-discord-500">
+                        {guildName ?? `Guild ${channel.guild_id}`} | ID: {channel.channel_id}
+                      </p>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-discord-500">
+                  No channels available. Connect the bot to a Discord server.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+export default Dashboard;

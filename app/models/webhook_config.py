@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, DateTime, JSON, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -20,13 +20,13 @@ class WebhookConfig(Base):
     channel_id: Mapped[str] = mapped_column(String(32), nullable=False)
     ai_summary_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     ai_max_diff_chars: Mapped[int] = mapped_column(BigInteger, nullable=False, default=12000)
-    llm_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    events: Mapped[list] = mapped_column(JSON, nullable=False, default=lambda: ["push", "pull_request", "issues"])
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    events: Mapped[list["WebhookEvent"]] = relationship(
+    events_rel: Mapped[list["WebhookEvent"]] = relationship(
         "WebhookEvent",
         back_populates="config",
         cascade="all, delete-orphan"

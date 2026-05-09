@@ -11,6 +11,21 @@ from app.logging_config import configure_logging
 from app.server import create_app
 
 
+async def _run_bot(bot_client: DiscordAssistantClient, token: str, logger: logging.Logger) -> None:
+    retry_delay = 5
+    max_retry_delay = 300
+    while True:
+        try:
+            await bot_client.start(token)
+            return
+        except Exception as exc:
+            logger.error("Discord bot failed: %s. Retrying in %ds...", exc, retry_delay)
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_retry_delay)
+            if not bot_client.is_closed():
+                await bot_client.close()
+
+
 async def run() -> None:
     settings = get_settings()
     configure_logging(settings.log_level, database_url=settings.database_url)
@@ -35,21 +50,17 @@ async def run() -> None:
 
     server_task = asyncio.create_task(server.serve(), name="fastapi_server")
     bot_task = asyncio.create_task(
-        bot_client.start(settings.discord_bot_token),
+        _run_bot(bot_client, settings.discord_bot_token, logger),
         name="discord_bot",
     )
 
-    done, pending = await asyncio.wait(
-        {server_task, bot_task},
-        return_when=asyncio.FIRST_EXCEPTION,
-    )
+    await server_task
 
-    for task in done:
-        if task.exception() is not None:
-            logger.error("Task %s failed: %s", task.get_name(), task.exception())
-
-    for task in pending:
-        task.cancel()
+    bot_task.cancel()
+    try:
+        await bot_task
+    except asyncio.CancelledError:
+        pass
 
     if not bot_client.is_closed():
         await bot_client.close()

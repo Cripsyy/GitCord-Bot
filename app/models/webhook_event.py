@@ -20,7 +20,7 @@ class WebhookEvent(Base):
         ForeignKey("webhook_configs.id"),
         nullable=True,
     )
-    config: Mapped["WebhookConfig"] = relationship("WebhookConfig", back_populates="events")
+    config: Mapped["WebhookConfig"] = relationship("WebhookConfig", back_populates="events_rel")
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     delivery_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     repository: Mapped[str | None] = mapped_column(String(200), nullable=True)

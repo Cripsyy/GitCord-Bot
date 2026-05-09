@@ -13,7 +13,6 @@ class GuildConfig(Base):
     name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     ai_summary_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     ai_max_diff_chars: Mapped[int] = mapped_column(BigInteger, nullable=False, default=12000)
-    llm_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

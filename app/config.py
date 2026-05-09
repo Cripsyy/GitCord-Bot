@@ -10,7 +10,6 @@ class Settings(BaseSettings):
     database_url: str
     llm_api_key: str | None = None
     llm_base_url: str = "https://api.openai.com/v1"
-    llm_model: str = "gpt-4o-mini"
     llm_timeout_seconds: int = 20
     log_level: str = "INFO"
     dashboard_api_key: str | None = None

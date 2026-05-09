@@ -168,6 +168,24 @@ async def github_callback(request: Request, code: str | None = None, state: str 
     return response
 
 
+@router.post("/disconnect/discord")
+async def disconnect_discord() -> JSONResponse:
+    response = JSONResponse({"ok": True})
+    response.set_cookie("discord_user_id", "", max_age=0, path="/")
+    response.set_cookie("discord_oauth_state", "", max_age=0, path="/")
+    response.set_cookie("discord_oauth_redirect", "", max_age=0, path="/")
+    return response
+
+
+@router.post("/disconnect/github")
+async def disconnect_github() -> JSONResponse:
+    response = JSONResponse({"ok": True})
+    response.set_cookie("github_user_id", "", max_age=0, path="/")
+    response.set_cookie("github_oauth_state", "", max_age=0, path="/")
+    response.set_cookie("github_oauth_redirect", "", max_age=0, path="/")
+    return response
+
+
 @router.post("/reset")
 async def reset_oauth_session() -> JSONResponse:
     response = JSONResponse({"ok": True})

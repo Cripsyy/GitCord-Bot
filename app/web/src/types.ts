@@ -10,7 +10,6 @@ export type Guild = {
   name: string | null;
   ai_summary_enabled: boolean;
   ai_max_diff_chars: number;
-  llm_model: string | null;
   created_at: string | null;
 };
 
@@ -29,8 +28,21 @@ export type WebhookConfig = {
   channel_id: string;
   ai_summary_enabled: boolean;
   ai_max_diff_chars: number;
-  llm_model: string | null;
+  events: string[];
   created_at?: string | null;
+};
+
+export type Profile = {
+  discord: {
+    id: string;
+    username: string;
+    avatar_url: string;
+  } | null;
+};
+
+export type SessionInfo = {
+  discord_connected: boolean;
+  github_connected: boolean;
 };
 
 export type Channel = {

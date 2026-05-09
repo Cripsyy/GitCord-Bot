@@ -154,7 +154,6 @@ async def _process_webhook_event(
                         pull_request_body=pull_request_body,
                         diff_text=diff_text or "",
                         ai_summary_enabled=config.ai_summary_enabled,
-                        llm_model=config.llm_model,
                         ai_max_diff_chars=config.ai_max_diff_chars,
                     )
                 except Exception:
