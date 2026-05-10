@@ -58,7 +58,7 @@ function Dashboard() {
     <div className="flex min-w-0 flex-1 flex-col">
       <Navbar title="Server Dashboard" />
 
-      <main className="flex-1 space-y-6 px-6 py-6">
+      <main className="flex-1 overflow-y-auto space-y-6 px-6 py-6">
         <section className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-4 shadow-soft">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>

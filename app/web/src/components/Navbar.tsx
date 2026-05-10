@@ -86,7 +86,6 @@ function Navbar({ title }: NavbarProps) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-discord-900 px-6 py-5">
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-discord-500">GitCord</p>
         <h1 className="font-display text-2xl text-discord-200">{title}</h1>
       </div>
       <div className="relative flex flex-wrap items-center gap-3" ref={menuAreaRef}>

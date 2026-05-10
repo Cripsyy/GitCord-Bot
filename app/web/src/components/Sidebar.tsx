@@ -1,9 +1,4 @@
-import type { Overview } from "../types";
-
 type SidebarProps = {
-  overview: Overview | null;
-  status: string;
-  onRefresh: () => void;
   currentPath: string;
 };
 
@@ -12,17 +7,12 @@ const navItems = [
   { label: "Configurations", path: "/configurations", icon: "⚙" },
 ];
 
-function Sidebar({ overview, status, onRefresh, currentPath }: SidebarProps) {
+function Sidebar({currentPath }: SidebarProps) {
   return (
     <aside className="hidden w-[260px] flex-col border-r border-white/5 bg-discord-950 px-5 py-6 lg:flex">
-      <div className="flex items-center gap-3 rounded-2xl bg-discord-850 px-3 py-3">
-        <div className="h-10 w-10 rounded-xl bg-discord-blurple/20 text-discord-blurple flex items-center justify-center font-display text-lg">
-          GC
-        </div>
-        <div>
-          <p className="font-display text-lg leading-none text-discord-200">GitCord</p>
-          <p className="text-xs text-discord-500">Command Center</p>
-        </div>
+      <div className="flex items-center gap-3 px-3 py-3 h-20 w-20">
+        <img src="/dashboard/Logo/gitcord-logo.png" alt="GitCord" className="object-fill" />
+        <span className="text-lg font-display text-discord-200">GitCord</span>
       </div>
       <div className="mt-8 space-y-1 text-sm">
         {navItems.map((item) => {
@@ -42,34 +32,6 @@ function Sidebar({ overview, status, onRefresh, currentPath }: SidebarProps) {
             </a>
           );
         })}
-      </div>
-      {overview ? (
-        <div className="mt-6 space-y-2 border-t border-white/5 pt-6">
-          {[
-            { label: "Guilds", value: overview.guilds },
-            { label: "Repos", value: overview.repositories },
-            { label: "Channels", value: overview.channels },
-            { label: "Webhooks", value: overview.webhook_configs },
-          ].map((stat) => (
-            <div key={stat.label} className="flex items-center justify-between text-xs">
-              <span className="text-discord-500">{stat.label}</span>
-              <span className="rounded-full bg-discord-800 px-2 py-0.5 text-discord-400">
-                {stat.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <div className="mt-auto rounded-2xl border border-white/5 bg-discord-850 px-4 py-4">
-        <p className="text-xs uppercase tracking-[0.2em] text-discord-500">Status</p>
-        <p className="mt-2 text-sm text-discord-200">{status}</p>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="mt-3 w-full rounded-lg bg-discord-blurple px-3 py-2 text-xs font-semibold text-white"
-        >
-          Refresh
-        </button>
       </div>
     </aside>
   );

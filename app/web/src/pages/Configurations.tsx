@@ -283,7 +283,7 @@ function Configurations() {
     <div className="flex min-w-0 flex-1 flex-col">
       <Navbar title="Webhook Configurations" />
 
-      <main className="flex-1 space-y-4 px-6 py-6">
+      <main className="flex-1 overflow-y-auto space-y-4 px-6 py-6">
         <button
           type="button"
           onClick={openCreate}
