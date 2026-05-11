@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Channel, Guild, Overview, Repository, WebhookConfig } from "../types";
 import Navbar from "../components/Navbar";
+import { fetchJson } from "../lib/api";
 
 type DashboardState = {
   overview: Overview | null;
@@ -21,17 +22,6 @@ const emptyState: DashboardState = {
 function Dashboard() {
   const [status, setStatus] = useState("Loading...");
   const [data, setData] = useState<DashboardState>(emptyState);
-
-  const headers = useMemo(() => ({}), []);
-
-  async function fetchJson<T>(path: string): Promise<T> {
-    const response = await fetch(path, { headers });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || response.statusText);
-    }
-    return response.json() as Promise<T>;
-  }
 
   async function loadDashboard() {
     setStatus("Loading data...");

@@ -1,7 +1,8 @@
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
-import Configurations from "./pages/Configurations";
+import WebhookConfigurations from "./pages/WebhookConfigurations";
+import AutomatedSummaries from "./pages/AutomatedSummaries";
 
 function App() {
   const location = useLocation();
@@ -16,7 +17,9 @@ function App() {
 
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/configurations" element={<Configurations />} />
+          <Route path="/configurations" element={<Navigate to="/configurations/webhooks" />} />
+          <Route path="/configurations/webhooks" element={<WebhookConfigurations />} />
+          <Route path="/configurations/summaries" element={<AutomatedSummaries />} />
           <Route path="*" element={<Dashboard />} />
         </Routes>
       </div>

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Channel, Guild, Repository, WebhookConfig } from "../types";
 import Navbar from "../components/Navbar";
+import SearchDropdown from "../components/SearchDropdown";
+import { fetchJson } from "../lib/api";
 
 type PageData = {
   guilds: Guild[];
@@ -18,73 +20,6 @@ type WebhookForm = {
   events: string[];
 };
 
-type SearchDropdownProps = {
-  label: string;
-  items: { value: string; label: string }[];
-  selected: string;
-  onSelect: (value: string) => void;
-  placeholder?: string;
-};
-
-function SearchDropdown({ label, items, selected, onSelect, placeholder }: SearchDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const filtered = items.filter((item) =>
-    item.label.toLowerCase().includes(search.toLowerCase())
-  );
-  const selectedLabel = items.find((i) => i.value === selected)?.label;
-
-  return (
-    <label className="text-xs text-discord-500">
-      {label}
-      <div className="relative mt-1">
-        <button
-          type="button"
-          onClick={() => setOpen((prev) => !prev)}
-          className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-discord-900 px-3 py-2 text-sm text-discord-200"
-        >
-          <span className="truncate">{selectedLabel ?? placeholder ?? "Select..."}</span>
-          <span className="ml-2 shrink-0 text-discord-500">▾</span>
-        </button>
-        {open ? (
-          <div className="absolute z-20 mt-1 w-full rounded-lg border border-white/10 bg-discord-900 p-2">
-            <button
-              type="button"
-              onClick={() => { onSelect(""); setOpen(false); setSearch(""); }}
-              className="w-full rounded-md px-2 py-1.5 text-left text-xs text-discord-500 hover:bg-discord-850"
-            >
-              Clear selection
-            </button>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="mt-1 w-full rounded-md border border-white/10 bg-discord-850 px-2 py-1.5 text-xs text-discord-200 outline-none focus:border-discord-blurple"
-            />
-            <div className="mt-1 max-h-40 overflow-y-auto">
-              {filtered.map((item) => (
-                <button
-                  key={item.value}
-                  type="button"
-                  onClick={() => { onSelect(item.value); setOpen(false); setSearch(""); }}
-                  className={`w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-discord-850 ${
-                    item.value === selected ? "text-discord-blurple" : "text-discord-200"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-              {filtered.length === 0 ? (
-                <p className="px-2 py-1.5 text-xs text-discord-500">No matches</p>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </label>
-  );
-}
-
 const ALL_EVENTS = ["push", "pull_request", "issues"];
 
 const emptyForm: WebhookForm = {
@@ -96,7 +31,7 @@ const emptyForm: WebhookForm = {
   events: ["push", "pull_request", "issues"],
 };
 
-function Configurations() {
+function WebhookConfigurations() {
   const [data, setData] = useState<PageData>({ guilds: [], repositories: [], webhooks: [], channels: [] });
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
@@ -110,17 +45,6 @@ function Configurations() {
   const [testMessage, setTestMessage] = useState("");
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testSending, setTestSending] = useState(false);
-
-  const headers = useMemo(() => ({}), []);
-
-  async function fetchJson<T>(path: string): Promise<T> {
-    const response = await fetch(path, { headers });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || response.statusText);
-    }
-    return response.json() as Promise<T>;
-  }
 
   async function loadData() {
     setLoading(true);
@@ -207,7 +131,7 @@ function Configurations() {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json", ...headers },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!response.ok) {
@@ -227,7 +151,7 @@ function Configurations() {
     if (!window.confirm("Delete this webhook configuration?")) return;
     setStatusMessage("Deleting...");
     try {
-      const response = await fetch(`/api/dashboard/webhooks/${webhookId}`, { method: "DELETE", headers });
+      const response = await fetch(`/api/dashboard/webhooks/${webhookId}`, { method: "DELETE" });
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || response.statusText);
@@ -246,7 +170,7 @@ function Configurations() {
     try {
       const response = await fetch(`/api/dashboard/webhooks/${webhookId}/test`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: testMessage }),
       });
       if (!response.ok) {
@@ -508,4 +432,4 @@ function Configurations() {
   );
 }
 
-export default Configurations;
+export default WebhookConfigurations;

@@ -52,3 +52,15 @@ export type Channel = {
   name: string | null;
   created_at: string | null;
 };
+
+export type SummaryConfig = {
+  id: string;
+  guild_id: string;
+  channel_id: string;
+  send_time: string;
+  include_prs: boolean;
+  include_issues: boolean;
+  include_standups: boolean;
+  enabled: boolean;
+  created_at: string | null;
+};

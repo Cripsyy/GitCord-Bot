@@ -5,6 +5,7 @@ import discord
 import uvicorn
 
 from app.bot.client import DiscordAssistantClient
+from app.bot.scheduler import run_summary_scheduler
 from app.config import get_settings
 from app.core.database import init_database
 from app.logging_config import configure_logging
@@ -47,6 +48,11 @@ async def run() -> None:
         log_level=settings.log_level.lower(),
     )
     server = uvicorn.Server(config=uvicorn_config)
+
+    summary_task = asyncio.create_task(
+        run_summary_scheduler(bot_client, settings),
+        name="summary_scheduler",
+    )
 
     server_task = asyncio.create_task(server.serve(), name="fastapi_server")
     bot_task = asyncio.create_task(

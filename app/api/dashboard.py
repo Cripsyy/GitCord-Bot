@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, HTTPException, Request, status
 
 import discord
@@ -8,6 +10,8 @@ from app.config import Settings
 from app.core.database import get_session
 from app.models.channel import ChannelConfig
 from app.models.guild import GuildConfig
+from app.models.standup_entry import StandupEntry
+from app.models.summary_config import SummaryConfig
 from app.models.webhook_config import WebhookConfig
 from app.services.github_webhooks import delete_github_webhook, ensure_github_webhook
 from app.services.oauth_clients import fetch_discord_identity, fetch_github_repos
@@ -522,3 +526,175 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
         break
 
     return {"subscriptions": results}
+
+
+@router.get("/summary-configs")
+async def list_summary_configs(request: Request) -> list[dict[str, object]]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+    for session in get_session(settings):
+        configs = session.query(SummaryConfig).order_by(SummaryConfig.created_at.desc()).all()
+        break
+    return [
+        {
+            "id": str(c.id),
+            "guild_id": str(c.guild_id),
+            "channel_id": str(c.channel_id),
+            "send_time": c.send_time,
+            "include_prs": c.include_prs,
+            "include_issues": c.include_issues,
+            "include_standups": c.include_standups,
+            "enabled": c.enabled,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        }
+        for c in configs
+    ]
+
+
+@router.post("/summary-configs", status_code=status.HTTP_201_CREATED)
+async def create_summary_config(request: Request, payload: dict[str, object]) -> dict[str, object]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+
+    guild_id = str(payload.get("guild_id") or "").strip()
+    channel_id = str(payload.get("channel_id") or "").strip()
+    send_time = str(payload.get("send_time") or "").strip()
+    include_prs = bool(payload.get("include_prs", True))
+    include_issues = bool(payload.get("include_issues", True))
+    include_standups = bool(payload.get("include_standups", True))
+    enabled = bool(payload.get("enabled", True))
+
+    if not guild_id or not channel_id or not send_time:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="guild_id, channel_id, and send_time are required",
+        )
+
+    for session in get_session(settings):
+        config = SummaryConfig(
+            guild_id=guild_id,
+            channel_id=channel_id,
+            send_time=send_time,
+            include_prs=include_prs,
+            include_issues=include_issues,
+            include_standups=include_standups,
+            enabled=enabled,
+        )
+        session.add(config)
+        session.commit()
+        session.refresh(config)
+        return {
+            "id": str(config.id),
+            "guild_id": str(config.guild_id),
+            "channel_id": str(config.channel_id),
+            "send_time": config.send_time,
+            "include_prs": config.include_prs,
+            "include_issues": config.include_issues,
+            "include_standups": config.include_standups,
+            "enabled": config.enabled,
+            "created_at": config.created_at.isoformat() if config.created_at else None,
+        }
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+@router.put("/summary-configs/{config_id}")
+async def update_summary_config(request: Request, config_id: str, payload: dict[str, object]) -> dict[str, object]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+
+    for session in get_session(settings):
+        config = session.get(SummaryConfig, int(config_id))
+        if config is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Summary config not found")
+
+        channel_id = payload.get("channel_id")
+        send_time = payload.get("send_time")
+        include_prs = payload.get("include_prs")
+        include_issues = payload.get("include_issues")
+        include_standups = payload.get("include_standups")
+        enabled = payload.get("enabled")
+
+        if channel_id is not None:
+            config.channel_id = str(channel_id).strip()
+        if send_time is not None:
+            config.send_time = str(send_time).strip()
+        if include_prs is not None:
+            config.include_prs = bool(include_prs)
+        if include_issues is not None:
+            config.include_issues = bool(include_issues)
+        if include_standups is not None:
+            config.include_standups = bool(include_standups)
+        if enabled is not None:
+            config.enabled = bool(enabled)
+
+        session.commit()
+        session.refresh(config)
+        return {
+            "id": str(config.id),
+            "guild_id": str(config.guild_id),
+            "channel_id": str(config.channel_id),
+            "send_time": config.send_time,
+            "include_prs": config.include_prs,
+            "include_issues": config.include_issues,
+            "include_standups": config.include_standups,
+            "enabled": config.enabled,
+            "created_at": config.created_at.isoformat() if config.created_at else None,
+        }
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+@router.delete("/summary-configs/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_summary_config(request: Request, config_id: str) -> None:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+    for session in get_session(settings):
+        config = session.get(SummaryConfig, int(config_id))
+        if config is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Summary config not found")
+        session.delete(config)
+        session.commit()
+        return None
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+@router.get("/standups")
+async def list_standups(request: Request, guild_id: str, date: str | None = None) -> list[dict[str, object]]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+
+    if date:
+        try:
+            start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC)
+            end = start + timedelta(days=1)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid date format, use YYYY-MM-DD",
+            )
+    else:
+        today_date = datetime.now(UTC).date()
+        end = datetime(today_date.year, today_date.month, today_date.day, tzinfo=UTC)
+        start = end - timedelta(days=1)
+
+    for session in get_session(settings):
+        entries = (
+            session.query(StandupEntry)
+            .filter(
+                StandupEntry.guild_id == guild_id,
+                StandupEntry.submitted_at >= start,
+                StandupEntry.submitted_at < end,
+            )
+            .order_by(StandupEntry.submitted_at.desc())
+            .all()
+        )
+        return [
+            {
+                "id": str(e.id),
+                "user_id": str(e.user_id),
+                "user_name": e.user_name,
+                "content": e.content,
+                "submitted_at": e.submitted_at.isoformat() if e.submitted_at else None,
+            }
+            for e in entries
+        ]
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")

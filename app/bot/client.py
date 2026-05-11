@@ -1,7 +1,9 @@
 import logging
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 from app.bot.views import PullRequestActionsView
@@ -9,6 +11,7 @@ from app.config import Settings
 from app.core.database import get_session
 from app.models.channel import ChannelConfig
 from app.models.guild import GuildConfig
+from app.models.standup_entry import StandupEntry
 
 
 class DiscordAssistantClient(commands.Bot):
@@ -16,6 +19,14 @@ class DiscordAssistantClient(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
         self.logger = logging.getLogger("discord_bot.client")
         self.settings = settings
+
+    async def setup_hook(self) -> None:
+        self.tree.clear_commands(guild=None)
+        for guild in self.guilds:
+            self.tree.clear_commands(guild=guild)
+        self.tree.add_command(standup_command)
+        await self.tree.sync()
+        self.logger.info("Slash commands synced (stale commands cleared)")
 
     async def on_ready(self) -> None:
         if self.user is None:
@@ -130,3 +141,29 @@ class DiscordAssistantClient(commands.Bot):
             await channel.send(embed=embed)
         else:
             await channel.send(embed=embed, view=view)
+
+
+@app_commands.command(name="standup", description="Submit your daily standup")
+async def standup_command(interaction: discord.Interaction, message: str) -> None:
+    if interaction.guild is None:
+        await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+        return
+    if len(message) > 2000:
+        await interaction.response.send_message("Standup message must be 2000 characters or fewer.", ephemeral=True)
+        return
+
+    settings: Settings = interaction.client.settings
+    for session in get_session(settings):
+        entry = StandupEntry(
+            guild_id=str(interaction.guild.id),
+            user_id=str(interaction.user.id),
+            user_name=interaction.user.display_name,
+            content=message,
+        )
+        session.add(entry)
+        session.commit()
+        break
+
+    await interaction.response.send_message(
+        "Your standup has been recorded!", ephemeral=True
+    )
