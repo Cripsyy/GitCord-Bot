@@ -53,12 +53,12 @@ function Sidebar({ currentPath }: { currentPath: string }) {
   const [configOpen, setConfigOpen] = useState(isConfigActive);
 
   return (
-    <aside className="hidden w-[260px] flex-col border-r border-white/5 bg-discord-950 px-5 py-6 lg:flex">
-      <div className="flex items-center gap-3 px-3 py-3 h-20 w-20">
+    <aside className="hidden w-[260px] flex-col border-r border-white/5 bg-discord-950 px-4 py-4 lg:flex">
+      <div className="flex items-center gap-3 px-3 pb-3 h-20 w-20">
         <img src="/dashboard/Logo/gitcord-logo.png" alt="GitCord" className="object-fill" />
-        <span className="text-lg font-display text-discord-200">GitCord</span>
+        <span className="text-xl font-display text-discord-200">GitCord</span>
       </div>
-      <div className="mt-8 space-y-1 text-sm">
+      <div className="mt-6 space-y-1 text-sm">
         {topNavItems.map((item) => {
           const isActive = item.hasSubItems ? isConfigActive : currentPath === item.path;
           const Tag = item.hasSubItems ? "button" : "a";
@@ -69,8 +69,8 @@ function Sidebar({ currentPath }: { currentPath: string }) {
               onClick={() => { if (item.hasSubItems) setConfigOpen((prev) => !prev); }}
               className={`flex items-center gap-3 w-full rounded-xl border px-3 py-2.5 text-left transition ${
                 isActive
-                  ? "border-discord-blurple/30 bg-discord-blurple/10 text-discord-200"
-                  : "border-transparent text-discord-500 hover:border-white/5 hover:bg-discord-850 hover:text-discord-200"
+                  ? "border-discord-blurple text-discord-200"
+                  : "border-transparent text-discord-500 hover:border-discord-blurple hover:text-discord-200"
               }`}
             >
               <span className="flex items-center justify-center w-5 h-5">{item.icon}</span>
@@ -90,8 +90,8 @@ function Sidebar({ currentPath }: { currentPath: string }) {
                   href={item.path}
                   className={`flex items-center gap-3 w-full rounded-xl border px-3 py-2.5 text-left transition ${
                     isActive
-                      ? "border-discord-blurple/30 bg-discord-blurple/10 text-discord-200"
-                      : "border-transparent text-discord-500 hover:border-white/5 hover:bg-discord-850 hover:text-discord-200"
+                    ? "border-discord-blurple text-discord-200"
+                    : "border-transparent text-discord-500 hover:border-discord-blurple hover:text-discord-200"
                   }`}
                 >
                   <span className="flex items-center justify-center w-5 h-5">{item.icon}</span>

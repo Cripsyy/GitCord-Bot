@@ -1,0 +1,157 @@
+import { useState } from "react";
+
+type ViewMode = "list" | "grid";
+
+export type SortDef<T> = {
+  value: string;
+  label: string;
+  compare: (a: T, b: T) => number;
+};
+
+type ConfigViewProps<T> = {
+  items: T[];
+  sortDefs: SortDef<T>[];
+  getSearchText: (item: T) => string;
+  renderItem: (item: T) => React.ReactNode;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+  toolbarExtra?: React.ReactNode;
+};
+
+function SearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function ListIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+
+function GridIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" />
+      <rect x="14" y="3" width="7" height="7" />
+      <rect x="3" y="14" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" />
+    </svg>
+  );
+}
+
+export default function ConfigView<T>({
+  items,
+  sortDefs,
+  getSearchText,
+  renderItem,
+  searchPlaceholder = "Search...",
+  emptyMessage = "No items found.",
+  toolbarExtra,
+}: ConfigViewProps<T>) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState(sortDefs[0]?.value ?? "");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+
+  const activeSort = sortDefs.find((s) => s.value === sortField) ?? sortDefs[0];
+
+  const filtered = items.filter((item) =>
+    getSearchText(item).toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const sorted = [...filtered].sort(
+    activeSort ? activeSort.compare : () => 0
+  );
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1">
+          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-discord-500">
+            <SearchIcon />
+          </span>
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="w-full rounded-lg border border-white/10 bg-discord-900 py-2 pl-9 pr-3 text-sm text-discord-200 outline-none placeholder:text-discord-500 focus:border-discord-blurple"
+          />
+        </div>
+
+        <div className="relative">
+          <select
+            value={sortField}
+            onChange={(e) => setSortField(e.target.value)}
+            className="appearance-none rounded-lg border border-white/10 bg-discord-900 px-8 py-2 text-sm text-discord-200 outline-none focus:border-discord-blurple"
+          >
+            {sortDefs.map((def) => (
+              <option key={def.value} value={def.value}>
+                Sort: {def.label}
+              </option>
+            ))}
+          </select>
+          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-discord-500">
+            ▾
+          </span>
+        </div>
+
+        <div className="flex items-center overflow-hidden rounded-lg border border-white/10">
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`px-2.5 py-2 ${
+              viewMode === "list"
+                ? "bg-discord-blurple text-white"
+                : "bg-discord-800 text-discord-400 hover:text-discord-200"
+            }`}
+            title="List view"
+          >
+            <ListIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("grid")}
+            className={`px-2.5 py-2 ${
+              viewMode === "grid"
+                ? "bg-discord-blurple text-white"
+                : "bg-discord-800 text-discord-400 hover:text-discord-200"
+            }`}
+            title="Grid view"
+          >
+            <GridIcon />
+          </button>
+        </div>
+
+        {toolbarExtra ? (
+          <div>{toolbarExtra}</div>
+        ) : null}
+      </div>
+
+      {sorted.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-white/5 bg-discord-850 px-5 py-8 text-center">
+          <p className="text-sm text-discord-500">{emptyMessage}</p>
+        </div>
+      ) : viewMode === "list" ? (
+        <div className="mt-4 space-y-3">
+          {sorted.map((item, i) => (
+            <div key={i}>{renderItem(item)}</div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {sorted.map((item, i) => (
+            <div key={i}>{renderItem(item)}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
