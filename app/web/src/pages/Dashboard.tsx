@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import type { Channel, Guild, Overview, Repository, WebhookConfig } from "../types";
+import type { Channel, Guild, Overview, Repository, WebhookConfig, SummaryConfig } from "../types";
 import Navbar from "../components/Navbar";
+import DashboardSection from "../components/DashboardSection";
 import { fetchJson } from "../lib/api";
 
 type DashboardState = {
@@ -9,6 +10,7 @@ type DashboardState = {
   repositories: Repository[];
   webhooks: WebhookConfig[];
   channels: Channel[];
+  summaryConfigs: SummaryConfig[];
 };
 
 const emptyState: DashboardState = {
@@ -17,6 +19,7 @@ const emptyState: DashboardState = {
   repositories: [],
   webhooks: [],
   channels: [],
+  summaryConfigs: [],
 };
 
 function Dashboard() {
@@ -26,14 +29,15 @@ function Dashboard() {
   async function loadDashboard() {
     setStatus("Loading data...");
     try {
-      const [overview, guilds, repositories, webhooks, channels] = await Promise.all([
+      const [overview, guilds, repositories, webhooks, channels, summaryConfigs] = await Promise.all([
         fetchJson<Overview>("/api/dashboard/overview"),
         fetchJson<Guild[]>("/api/dashboard/guilds"),
         fetchJson<Repository[]>("/api/dashboard/repositories"),
         fetchJson<WebhookConfig[]>("/api/dashboard/webhooks"),
         fetchJson<Channel[]>("/api/dashboard/channels"),
+        fetchJson<SummaryConfig[]>("/api/dashboard/summary-configs"),
       ]);
-      setData({ overview, guilds, repositories, webhooks, channels });
+      setData({ overview, guilds, repositories, webhooks, channels, summaryConfigs });
       setStatus("Live");
     } catch (error) {
       setStatus(`Error: ${(error as Error).message}`);
@@ -65,12 +69,13 @@ function Dashboard() {
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-3 xl:grid-cols-5">
           {[
             { label: "Guilds", value: data.overview?.guilds ?? 0 },
             { label: "Repositories", value: data.overview?.repositories ?? 0 },
-            { label: "Channels", value: data.overview?.channels ?? 0 },
             { label: "Webhooks", value: data.overview?.webhook_configs ?? 0 },
+            { label: "Summaries", value: data.overview?.summary_configs ?? data.summaryConfigs.length },
+            { label: "Channels", value: data.overview?.channels ?? 0 },
           ].map((card) => (
             <div
               key={card.label}
@@ -85,134 +90,171 @@ function Dashboard() {
         </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
-          <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-lg text-discord-200">Guilds</h2>
-            </div>
-            <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
-              {data.guilds.length ? (
-                data.guilds.map((guild) => (
-                  <div
-                    key={guild.id}
-                    className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
-                  >
-                    <p className="text-sm font-semibold text-discord-200">
-                      {guild.name ?? "Unnamed guild"}
-                    </p>
-                    <p className="text-xs text-discord-500">ID: {guild.id}</p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-discord-500">No data yet.</p>
-              )}
-            </div>
-          </div>
+          <DashboardSection title="Guilds">
+            {data.guilds.length ? (
+              data.guilds.map((guild) => (
+                <div
+                  key={guild.id}
+                  className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                >
+                  <p className="text-sm font-semibold text-discord-200">
+                    {guild.name ?? "Unnamed guild"}
+                  </p>
+                  <p className="text-xs text-discord-500">ID: {guild.id}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-discord-500">No data yet.</p>
+            )}
+          </DashboardSection>
 
-          <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-lg text-discord-200">Repositories</h2>
-            </div>
-            <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
-              {data.repositories.length ? (
-                data.repositories.map((repo) => (
-                  <div
-                    key={repo.id}
-                    className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
-                  >
-                    <p className="text-sm font-semibold text-discord-200">{repo.full_name}</p>
-                    <p className="text-xs text-discord-500">
-                      {repo.private ? "Private" : "Public"}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-discord-500">
-                  Connect Discord + GitHub to list repositories.
-                </p>
-              )}
-            </div>
-          </div>
+          <DashboardSection title="Repositories">
+            {data.repositories.length ? (
+              data.repositories.map((repo) => (
+                <div
+                  key={repo.id}
+                  className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                >
+                  <p className="text-sm font-semibold text-discord-200">{repo.full_name}</p>
+                  <p className="text-xs text-discord-500">
+                    {repo.private ? "Private" : "Public"}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-discord-500">
+                Connect Discord + GitHub to list repositories.
+              </p>
+            )}
+          </DashboardSection>
         </section>
 
         <section className="grid gap-5 xl:grid-cols-2">
-          <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-lg text-discord-200">Webhook Configs</h2>
+          <DashboardSection
+            title="Webhook Configs"
+            action={
               <a
                 href="/configurations"
                 className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white"
               >
                 Manage Configurations
               </a>
-            </div>
-            <div className="mt-4 max-h-48 space-y-3 overflow-y-auto pr-2">
-              {data.webhooks.length ? (
-                data.webhooks.map((webhook) => {
-                  const guildName = data.guilds.find(
-                    (g) => String(g.id) === webhook.guild_id
-                  )?.name;
-                  const channelName = data.channels.find(
-                    (c) => String(c.channel_id) === webhook.channel_id
-                  )?.name;
-                  return (
-                    <div
-                      key={webhook.id}
-                      className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
-                    >
-                      <p className="text-sm font-semibold truncate text-discord-200">
-                        {webhook.repository_full_name}
-                      </p>
-                      <p className="text-xs text-discord-400">
-                        {guildName ?? `Guild ${webhook.guild_id}`} → {channelName ?? `Channel ${webhook.channel_id}`}
-                      </p>
-                      <p className="text-xs text-discord-500">
-                        Slug: {webhook.secret_slug} | Events: {webhook.events?.join(", ") ?? "push, pull_request, issues"}
-                      </p>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-discord-500">
-                  No webhook configs yet.{" "}
-                  <a href="/configurations" className="text-discord-blurple underline">
-                    Create one
-                  </a>
-                </p>
-              )}
-            </div>
-          </div>
+            }
+          >
+            {data.webhooks.length ? (
+              data.webhooks.map((webhook) => {
+                const guildName = data.guilds.find(
+                  (g) => String(g.id) === webhook.guild_id
+                )?.name;
+                const channelName = data.channels.find(
+                  (c) => String(c.channel_id) === webhook.channel_id
+                )?.name;
+                return (
+                  <div
+                    key={webhook.id}
+                    className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                  >
+                    <p className="text-sm font-semibold truncate text-discord-200">
+                      {webhook.repository_full_name}
+                    </p>
+                    <p className="text-xs text-discord-400">
+                      {guildName ?? `Guild ${webhook.guild_id}`} → {channelName ?? `Channel ${webhook.channel_id}`}
+                    </p>
+                    <p className="text-xs text-discord-500">
+                      Slug: {webhook.secret_slug} | Events: {webhook.events?.join(", ") ?? "push, pull_request, issues"}
+                    </p>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-discord-500">
+                No webhook configs yet.{" "}
+                <a href="/configurations" className="text-discord-blurple underline">
+                  Create one
+                </a>
+              </p>
+            )}
+          </DashboardSection>
 
-          <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-lg text-discord-200">Channels</h2>
-            </div>
-            <div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-2">
-              {data.channels.length ? (
-                data.channels.map((channel) => {
-                  const guildName = data.guilds.find(
-                    (g) => String(g.id) === channel.guild_id
-                  )?.name;
-                  return (
-                    <div
-                      key={channel.id}
-                      className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
-                    >
-                      <p className="text-sm font-semibold text-discord-200">
-                        {channel.name ?? "Unnamed channel"}
-                      </p>
-                      <p className="text-xs text-discord-500">
-                        {guildName ?? `Guild ${channel.guild_id}`} | ID: {channel.channel_id}
-                      </p>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-discord-500">
-                  No channels available. Connect the bot to a Discord server.
-                </p>
-              )}
-            </div>
-          </div>
+          <DashboardSection
+            title="Summaries"
+            action={
+              <a
+                href="/configurations/summaries"
+                className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white"
+              >
+                Manage Summaries
+              </a>
+            }
+          >
+            {data.summaryConfigs.length ? (
+              data.summaryConfigs.map((config) => {
+                const guildName = data.guilds.find(
+                  (g) => String(g.id) === config.guild_id
+                )?.name;
+                const channelName = data.channels.find(
+                  (c) => String(c.channel_id) === config.channel_id
+                )?.name;
+                const includedItems = [
+                  config.include_prs ? "PRs" : null,
+                  config.include_issues ? "Issues" : null,
+                  config.include_standups ? "Standups" : null,
+                ].filter(Boolean).join(", ");
+                return (
+                  <div
+                    key={config.id}
+                    className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                  >
+                    <p className="text-sm font-semibold text-discord-200">
+                      {guildName ?? `Guild ${config.guild_id}`}
+                    </p>
+                    <p className="text-xs text-discord-400">
+                      {channelName ?? `Channel ${config.channel_id}`} — {config.send_time} UTC
+                    </p>
+                    <p className="text-xs text-discord-500">
+                      {includedItems} · {config.enabled ? "Active" : "Disabled"}
+                    </p>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-discord-500">
+                No summary schedules yet.{" "}
+                <a href="/configurations/summaries" className="text-discord-blurple underline">
+                  Create one
+                </a>
+              </p>
+            )}
+          </DashboardSection>
+        </section>
+
+        <section className="grid gap-5 xl:grid-cols-2">
+          <DashboardSection title="Channels">
+            {data.channels.length ? (
+              data.channels.map((channel) => {
+                const guildName = data.guilds.find(
+                  (g) => String(g.id) === channel.guild_id
+                )?.name;
+                return (
+                  <div
+                    key={channel.id}
+                    className="rounded-xl border border-white/5 bg-discord-900 px-4 py-3"
+                  >
+                    <p className="text-sm font-semibold text-discord-200">
+                      {channel.name ?? "Unnamed channel"}
+                    </p>
+                    <p className="text-xs text-discord-500">
+                      {guildName ?? `Guild ${channel.guild_id}`} | ID: {channel.channel_id}
+                    </p>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-discord-500">
+                No channels available. Connect the bot to a Discord server.
+              </p>
+            )}
+          </DashboardSection>
         </section>
       </main>
     </div>

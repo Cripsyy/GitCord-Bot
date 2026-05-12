@@ -243,7 +243,7 @@ function WebhookConfigurations() {
       (c) => String(c.channel_id) === webhook.channel_id
     )?.name;
     return (
-      <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-4">
+      <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-4 shadow-soft">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <p className="font-display text-base text-discord-200 truncate">
@@ -265,21 +265,21 @@ function WebhookConfigurations() {
                 setTestingId(webhook.id);
                 setTestMessage("");
               }}
-              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-400 hover:text-discord-200"
+              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-200 hover:text-discord-200"
             >
               Test
             </button>
             <button
               type="button"
               onClick={() => openEdit(webhook)}
-              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-400 hover:text-discord-200"
+              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-200 hover:text-discord-200"
             >
               Edit
             </button>
             <button
               type="button"
               onClick={() => handleDelete(webhook.id)}
-              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-500 hover:text-red-400"
+              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-200 hover:text-red-400"
             >
               Delete
             </button>

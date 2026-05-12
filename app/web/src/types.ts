@@ -3,6 +3,7 @@ export type Overview = {
   repositories: number;
   channels: number;
   webhook_configs: number;
+  summary_configs: number;
 };
 
 export type Guild = {

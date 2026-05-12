@@ -217,7 +217,7 @@ function AutomatedSummaries() {
       config.include_standups ? "Standups" : null,
     ].filter(Boolean).join(", ");
     return (
-      <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-4">
+      <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-4 shadow-soft">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <p className="font-display text-base text-discord-200">
@@ -236,14 +236,14 @@ function AutomatedSummaries() {
             <button
               type="button"
               onClick={() => openEdit(config)}
-              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-400 hover:text-discord-200"
+              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-200 hover:text-discord-200"
             >
               Edit
             </button>
             <button
               type="button"
               onClick={() => handleDelete(config.id)}
-              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-500 hover:text-red-400"
+              className="rounded-lg border border-white/10 bg-discord-800 px-2.5 py-1.5 text-xs text-discord-200 hover:text-red-400"
             >
               Delete
             </button>

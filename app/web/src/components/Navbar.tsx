@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile, SessionInfo } from "../types";
+import { ChevronIcon } from "./Icons";
+
 
 type NavbarProps = {
   title: string;
@@ -92,7 +94,7 @@ function Navbar({ title }: NavbarProps) {
         <button
           type="button"
           onClick={() => setMenuOpen((prev) => !prev)}
-          className="flex items-center gap-3 rounded-full border border-white/5 bg-discord-850 px-3 py-2"
+          className="flex items-center gap-3 rounded-full border border-white/5 bg-discord-850 px-3 py-2 shadow-soft"
         >
           {profile.discord ? (
             <img
@@ -103,10 +105,10 @@ function Navbar({ title }: NavbarProps) {
           ) : (
             <div className="h-8 w-8 rounded-full bg-discord-800" />
           )}
-          <div className="text-left text-xs">
-            <p className="text-discord-200">{profile.discord?.username ?? "Admin User"}</p>
-            <p className="text-discord-500">Menu</p>
-          </div>
+          <span className="text-xs text-discord-200">{profile.discord?.username ?? "Admin User"}</span>
+          <span className="text-discord-500">
+            <ChevronIcon open={menuOpen} />
+          </span>
         </button>
         {menuOpen ? (
           <div className="absolute right-0 top-14 z-10 w-72 rounded-2xl border border-white/5 bg-discord-850 p-3 shadow-soft">
