@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import type { Guild, LeaderboardEntry } from "../types";
 import Navbar from "../components/Navbar";
 import Podium from "../components/Podium";
-import ConfigView from "../components/ConfigView";
-import type { SortDef } from "../components/ConfigView";
-import { SearchIcon, ListIcon, GridIcon } from "../components/Icons";
+import { ConfigList } from "../components/ConfigView";
+import { SearchIcon, ChevronIcon } from "../components/Icons";
+import SearchDropdown from "../components/SearchDropdown";
+import { getLevelProgress } from "../lib/xp";
 import { fetchJson } from "../lib/api";
-
-type ViewMode = "list" | "grid";
+import GitHubAvatar from "../components/GitHubAvatar";
 
 function Leaderboard() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -16,8 +16,7 @@ function Leaderboard() {
   const [statusMessage, setStatusMessage] = useState("");
   const [guildFilter, setGuildFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortField, setSortField] = useState("xp");
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   async function loadData() {
     setLoading(true);
@@ -46,24 +45,6 @@ function Leaderboard() {
     if (guilds.length) loadData();
   }, [guildFilter]);
 
-  const sortDefs: SortDef<LeaderboardEntry>[] = [
-    {
-      value: "xp",
-      label: "XP",
-      compare: (a, b) => b.xp - a.xp,
-    },
-    {
-      value: "level",
-      label: "Level",
-      compare: (a, b) => b.level - a.level,
-    },
-    {
-      value: "user",
-      label: "User",
-      compare: (a, b) => (a.github_user ?? "").localeCompare(b.github_user ?? ""),
-    },
-  ];
-
   const podiumEntries = entries.slice(0, 3);
   const remainingEntries = entries.slice(3);
 
@@ -76,84 +57,55 @@ function Leaderboard() {
     label: g.name ?? `Guild ${g.id}`,
   }));
 
+  const sortedRemaining = [...remainingEntries]
+    .filter((entry) =>
+      getSearchText(entry).toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => b.xp - a.xp);
+
+  function toggleExpand(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <Navbar title="Leaderboard" />
 
       <main className="flex-1 overflow-y-auto space-y-4 px-6 py-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <select
-              value={guildFilter}
-              onChange={(e) => setGuildFilter(e.target.value)}
-              className="appearance-none rounded-lg border border-white/10 bg-discord-900 px-8 py-2 text-sm text-discord-200 outline-none focus:border-discord-blurple"
-            >
-              <option value="">All Servers</option>
-              {guildOptions.map((g) => (
-                <option key={g.value} value={g.value}>{g.label}</option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-discord-500">▾</span>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="w-52">
+            <SearchDropdown
+              label=""
+              items={guildOptions}
+              selected={guildFilter}
+              onSelect={(value) => setGuildFilter(value)}
+              placeholder="All Servers"
+            />
           </div>
-
-          <div className="relative min-w-0 flex-1 sm:max-w-xs">
+          <div className="relative min-w-0 flex-1">
             <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-discord-500">
               <SearchIcon />
             </span>
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by user..."
+              placeholder="Search..."
               className="w-full rounded-lg border border-white/10 bg-discord-900 py-2 pl-9 pr-3 text-sm text-discord-200 outline-none placeholder:text-discord-500 focus:border-discord-blurple"
             />
-          </div>
-
-          <div className="relative">
-            <select
-              value={sortField}
-              onChange={(e) => setSortField(e.target.value)}
-              className="appearance-none rounded-lg border border-white/10 bg-discord-900 px-8 py-2 text-sm text-discord-200 outline-none focus:border-discord-blurple"
-            >
-              {sortDefs.map((def) => (
-                <option key={def.value} value={def.value}>
-                  Sort: {def.label}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-discord-500">▾</span>
-          </div>
-
-          <div className="flex items-center overflow-hidden rounded-lg border border-white/10">
-            <button
-              type="button"
-              onClick={() => setViewMode("list")}
-              className={`px-2.5 py-2 ${
-                viewMode === "list"
-                  ? "bg-discord-blurple text-white"
-                  : "bg-discord-800 text-discord-400 hover:text-discord-200"
-              }`}
-              title="List view"
-            >
-              <ListIcon />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              className={`px-2.5 py-2 ${
-                viewMode === "grid"
-                  ? "bg-discord-blurple text-white"
-                  : "bg-discord-800 text-discord-400 hover:text-discord-200"
-              }`}
-              title="Grid view"
-            >
-              <GridIcon />
-            </button>
           </div>
 
           <button
             type="button"
             onClick={loadData}
-            className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white"
+            className="rounded-lg bg-discord-blurple px-4 py-2 text-sm font-semibold text-white hover:bg-discord-blurple/90 transition-colors"
           >
             Refresh
           </button>
@@ -169,42 +121,82 @@ function Leaderboard() {
           <>
             <Podium entries={podiumEntries} guilds={guilds} />
 
-            <ConfigView
-              items={remainingEntries}
-              sortDefs={sortDefs}
-              getSearchText={getSearchText}
-              hideToolbar
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              sortField={sortField}
-              onSortChange={setSortField}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              renderItem={(entry) => {
-                const guildName = guilds.find((g) => String(g.id) === entry.guild_id)?.name;
-                const rank = entries.indexOf(entry) + 1;
-                return (
-                  <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-4 shadow-soft">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-discord-800 text-sm font-bold text-discord-200">
-                        {rank.toString()}
+            {sortedRemaining.length === 0 ? (
+              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-8 text-center">
+                <p className="text-sm text-discord-500">
+                  No leaderboard entries yet. Data will appear once GitHub webhook events are processed.
+                </p>
+              </div>
+            ) : (
+              <ConfigList>
+                {sortedRemaining.map((entry) => {
+                  const guildName = guilds.find((g) => String(g.id) === entry.guild_id)?.name;
+                  const rank = entries.indexOf(entry) + 1;
+                  const isExpanded = expandedIds.has(entry.id);
+                  const { surplus, needed, progress } = getLevelProgress(entry.xp, entry.level);
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-4 shadow-soft cursor-pointer transition-colors hover:bg-discord-800/50"
+                      onClick={() => toggleExpand(entry.id)}
+                    >
+                      <div className="flex items-center gap-4">
+                        <GitHubAvatar
+                          username={entry.github_user}
+                          sizeClass="h-10 w-10 text-sm"
+                          fallback={rank.toString()}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display text-base text-discord-200 truncate">
+                            {entry.github_user}
+                          </p>
+                          <p className="text-xs text-discord-400">
+                            {guildName ?? `Guild ${entry.guild_id}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 text-right">
+                          <div>
+                            <p className="font-display text-lg text-discord-200">
+                              Level {entry.level}
+                            </p>
+                            <p className="text-xs text-discord-500">
+                              {entry.xp.toLocaleString()} XP
+                            </p>
+                          </div>
+                          <span className="text-discord-500">
+                            <ChevronIcon open={isExpanded} />
+                          </span>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-display text-base text-discord-200 truncate">{entry.github_user}</p>
-                        <p className="text-xs text-discord-400">
-                          {guildName ?? `Guild ${entry.guild_id}`}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-display text-lg text-discord-200">Level {entry.level}</p>
-                        <p className="text-xs text-discord-500">{entry.xp.toLocaleString()} XP</p>
-                      </div>
+
+                      {isExpanded ? (
+                        <div className="mt-4 pt-4 border-t border-white/5">
+                          <div className="flex justify-between text-xs text-discord-400 mb-1.5">
+                            <span>Progress to Level {entry.level + 1}</span>
+                            <span>
+                              {surplus} / {needed} XP
+                            </span>
+                          </div>
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-discord-800">
+                            <div
+                              className="h-full rounded-full bg-discord-blurple transition-all duration-500"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <p className="mt-2 text-xs text-discord-500">
+                            <span className="text-discord-200 font-semibold">
+                              {needed - surplus}
+                            </span>{" "}
+                            more XP needed to reach Level {entry.level + 1}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
-                );
-              }}
-              emptyMessage="No leaderboard entries yet. Data will appear once GitHub webhook events are processed."
-            />
+                  );
+                })}
+              </ConfigList>
+            )}
           </>
         )}
       </main>

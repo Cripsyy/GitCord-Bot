@@ -21,7 +21,7 @@ export default function SearchDropdown({ label, items, selected, onSelect, place
   return (
     <label className="text-xs text-discord-500">
       {label}
-      <div className="relative mt-1">
+      <div className={`relative ${label ? "mt-1" : ""}`}>
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}

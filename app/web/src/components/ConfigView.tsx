@@ -1,13 +1,107 @@
 import { useState } from "react";
 import { SearchIcon, ListIcon, GridIcon } from "./Icons";
 
-type ViewMode = "list" | "grid";
+export type ViewMode = "list" | "grid";
 
 export type SortDef<T> = {
   value: string;
   label: string;
   compare: (a: T, b: T) => number;
 };
+
+type ConfigSearchProps = {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+};
+
+export function ConfigSearch({ value, onChange, placeholder = "Search...", className }: ConfigSearchProps) {
+  return (
+    <div className={`relative min-w-0 flex-1 ${className ?? ""}`}>
+      <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-discord-500">
+        <SearchIcon />
+      </span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-white/10 bg-discord-900 py-2 pl-9 pr-3 text-sm text-discord-200 outline-none placeholder:text-discord-500 focus:border-discord-blurple"
+      />
+    </div>
+  );
+}
+
+type ConfigSortProps<T> = {
+  value: string;
+  onChange: (value: string) => void;
+  options: SortDef<T>[];
+};
+
+export function ConfigSort<T>({ value, onChange, options }: ConfigSortProps<T>) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none rounded-lg border border-white/10 bg-discord-900 px-8 py-2 text-sm text-discord-200 outline-none focus:border-discord-blurple"
+      >
+        {options.map((def) => (
+          <option key={def.value} value={def.value}>
+            Sort: {def.label}
+          </option>
+        ))}
+      </select>
+      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-discord-500">
+        ▾
+      </span>
+    </div>
+  );
+}
+
+type ConfigViewModeProps = {
+  value: ViewMode;
+  onChange: (mode: ViewMode) => void;
+};
+
+export function ConfigViewMode({ value, onChange }: ConfigViewModeProps) {
+  return (
+    <div className="flex items-center overflow-hidden rounded-lg border border-white/10">
+      <button
+        type="button"
+        onClick={() => onChange("list")}
+        className={`px-2.5 py-2 ${
+          value === "list"
+            ? "bg-discord-blurple text-white"
+            : "bg-discord-800 text-discord-400 hover:text-discord-200"
+        }`}
+        title="List view"
+      >
+        <ListIcon />
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("grid")}
+        className={`px-2.5 py-2 ${
+          value === "grid"
+            ? "bg-discord-blurple text-white"
+            : "bg-discord-800 text-discord-400 hover:text-discord-200"
+        }`}
+        title="Grid view"
+      >
+        <GridIcon />
+      </button>
+    </div>
+  );
+}
+
+export function ConfigList({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-3">{children}</div>;
+}
+
+export function ConfigGrid({ children }: { children: React.ReactNode }) {
+  return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{children}</div>;
+}
 
 type ConfigViewProps<T> = {
   items: T[];
@@ -67,66 +161,15 @@ export default function ConfigView<T>({
   return (
     <div>
       {!hideToolbar ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-0 flex-1">
-            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-discord-500">
-              <SearchIcon />
-            </span>
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={searchPlaceholder}
-              className="w-full rounded-lg border border-white/10 bg-discord-900 py-2 pl-9 pr-3 text-sm text-discord-200 outline-none placeholder:text-discord-500 focus:border-discord-blurple"
-            />
-          </div>
-
-          <div className="relative">
-            <select
-              value={sortField}
-              onChange={(e) => setSortField(e.target.value)}
-              className="appearance-none rounded-lg border border-white/10 bg-discord-900 px-8 py-2 text-sm text-discord-200 outline-none focus:border-discord-blurple"
-            >
-              {sortDefs.map((def) => (
-                <option key={def.value} value={def.value}>
-                  Sort: {def.label}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-discord-500">
-              ▾
-            </span>
-          </div>
-
-          <div className="flex items-center overflow-hidden rounded-lg border border-white/10">
-            <button
-              type="button"
-              onClick={() => setViewMode("list")}
-              className={`px-2.5 py-2 ${
-                viewMode === "list"
-                  ? "bg-discord-blurple text-white"
-                  : "bg-discord-800 text-discord-400 hover:text-discord-200"
-              }`}
-              title="List view"
-            >
-              <ListIcon />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              className={`px-2.5 py-2 ${
-                viewMode === "grid"
-                  ? "bg-discord-blurple text-white"
-                  : "bg-discord-800 text-discord-400 hover:text-discord-200"
-              }`}
-              title="Grid view"
-            >
-              <GridIcon />
-            </button>
-          </div>
-
-          {toolbarExtra ? (
-            <div>{toolbarExtra}</div>
-          ) : null}
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <ConfigSearch
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={searchPlaceholder}
+          />
+          <ConfigSort value={sortField} onChange={setSortField} options={sortDefs} />
+          <ConfigViewMode value={viewMode} onChange={setViewMode} />
+          {toolbarExtra ? <div>{toolbarExtra}</div> : null}
         </div>
       ) : null}
 
@@ -135,17 +178,17 @@ export default function ConfigView<T>({
           <p className="text-sm text-discord-500">{emptyMessage}</p>
         </div>
       ) : viewMode === "list" ? (
-        <div className="space-y-3">
+        <ConfigList>
           {sorted.map((item, i) => (
             <div key={i}>{renderItem(item)}</div>
           ))}
-        </div>
+        </ConfigList>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ConfigGrid>
           {sorted.map((item, i) => (
             <div key={i}>{renderItem(item)}</div>
           ))}
-        </div>
+        </ConfigGrid>
       )}
     </div>
   );

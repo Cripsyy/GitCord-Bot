@@ -1,74 +1,101 @@
 import type { Guild, LeaderboardEntry } from "../types";
+import { getLevelProgress } from "../lib/xp";
+import GitHubAvatar from "./GitHubAvatar";
 
 type PodiumProps = {
   entries: LeaderboardEntry[];
   guilds: Guild[];
 };
 
-const MEDAL_COLORS = ["#FFD700", "#C0C0C0", "#CD7F32"];
-const MEDAL_GLOWS = [
-  "0 0 32px rgba(255,215,0,0.22), inset 0 0 8px rgba(255,215,0,0.12)",
-  "0 0 24px rgba(192,192,192,0.16), inset 0 0 6px rgba(192,192,192,0.08)",
-  "0 0 20px rgba(205,127,50,0.14), inset 0 0 6px rgba(205,127,50,0.06)",
-];
-const MEDAL_LABELS = ["1st", "2nd", "3rd"];
+const MEDAL_TEXT_CLASSES = ["text-[#FFD700]", "text-[#C0C0C0]", "text-[#CD7F32]"];
+const MEDAL_BG_CLASSES = ["bg-[#FFD700]", "bg-[#C0C0C0]", "bg-[#CD7F32]"];
 
 export default function Podium({ entries, guilds }: PodiumProps) {
   if (entries.length === 0) return null;
 
+  // Reorder to [2nd, 1st, 3rd] for the visual layout
+  const slots: { entry: LeaderboardEntry; index: number }[] = [];
+  if (entries.length >= 2) slots.push({ entry: entries[1], index: 1 });
+  slots.push({ entry: entries[0], index: 0 });
+  if (entries.length >= 3) slots.push({ entry: entries[2], index: 2 });
+
+  const colCount = slots.length;
+
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      {entries.slice(0, 3).map((entry, i) => {
+    <div
+      className={`grid gap-3 sm:gap-5 items-end ${
+        colCount === 3
+          ? "grid-cols-3"
+          : colCount === 2
+          ? "grid-cols-2 max-w-sm mx-auto"
+          : "grid-cols-1 max-w-[240px] mx-auto"
+      }`}
+    >
+      {slots.map(({ entry, index }) => {
         const guildName = guilds.find((g) => String(g.id) === entry.guild_id)?.name;
-        const medal = MEDAL_COLORS[i];
-        const glow = MEDAL_GLOWS[i];
-        const isFirst = i === 0;
+        const isFirst = index === 0;
+        const { surplus, needed, progress } = getLevelProgress(entry.xp, entry.level);
 
         return (
           <div
             key={entry.id}
-            className={`rounded-2xl border border-white/5 bg-discord-850 px-5 py-5 shadow-soft ${
-              isFirst ? "sm:scale-[1.03] sm:ring-1 sm:ring-white/10" : ""
-            }`}
-            style={{ boxShadow: `${glow}, 0 18px 40px rgba(0,0,0,0.28)` }}
+            className={`flex flex-col items-center min-w-0 ${isFirst ? "z-10" : "z-0"}`}
           >
-            <div className="flex items-center gap-4">
-              <div
-                className={`flex shrink-0 items-center justify-center rounded-full text-lg font-bold text-discord-900 ${
-                  isFirst ? "h-14 w-14" : "h-12 w-12"
-                }`}
-                style={{ backgroundColor: medal }}
+            {/* Avatar */}
+            <GitHubAvatar
+              username={entry.github_user}
+              sizeClass="h-16 w-16 text-lg"
+              fallback={index + 1}
+            />
+
+            {/* Username */}
+            <p className="text-sm font-semibold text-discord-200 text-center truncate w-full px-2">
+              {entry.github_user}
+            </p>
+            <p className="text-[11px] text-discord-500 text-center truncate w-full px-2 mb-2">
+              {guildName ?? `Guild ${entry.guild_id}`}
+            </p>
+
+            {/* Podium block */}
+            <div
+              className={`w-full rounded-xl border border-white/5 bg-discord-850 flex flex-col items-center justify-start text-center px-4 pt-5 pb-4 shadow-soft ${
+                isFirst ? "h-[180px]" : "h-[140px]"
+              }`}
+            >
+              {/* Place number */}
+              <span
+                className={`text-3xl font-bold font-display leading-none ${MEDAL_TEXT_CLASSES[index]}`}
               >
-                {i + 1}
+                {index + 1}
+              </span>
+
+              <span className="text-[10px] uppercase tracking-wider text-discord-500 mt-1">
+                Place
+              </span>
+
+              {/* XP */}
+              <div className="mt-3 flex items-baseline gap-1">
+                <p className="text-lg font-bold text-discord-200 leading-none">
+                  {entry.xp.toLocaleString()}
+                </p>
+                <p className="text-[10px] text-discord-500">XP</p>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-display text-base text-discord-200 truncate">
-                  {entry.github_user}
-                </p>
-                <p className="text-xs text-discord-400 truncate">
-                  {guildName ?? `Guild ${entry.guild_id}`}
-                </p>
+
+              {/* Level progress */}
+              <div className="mt-auto w-full">
+                <div className="flex justify-between text-[10px] text-discord-500 mb-1">
+                  <span>Level {entry.level}</span>
+                  <span>
+                    {surplus} / {needed}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-discord-900/80">
+                  <div
+                    className={`h-full rounded-full ${MEDAL_BG_CLASSES[index]}`}
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
               </div>
-              <div className="shrink-0 text-right">
-                <p className="text-xs uppercase tracking-wider text-discord-500">
-                  {MEDAL_LABELS[i]}
-                </p>
-                <p className={`font-display text-lg text-discord-200 ${isFirst ? "mt-0.5" : ""}`}>
-                  Level {entry.level}
-                </p>
-                <p className="text-xs text-discord-500">
-                  {entry.xp.toLocaleString()} XP
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-discord-800">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  backgroundColor: medal,
-                  width: `${Math.min(100, ((entry.xp % 100) / 100) * 100 || 0)}%`,
-                }}
-              />
             </div>
           </div>
         );
