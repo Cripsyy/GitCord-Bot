@@ -69,13 +69,14 @@ function Dashboard() {
           </div>
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-3 xl:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-3 xl:grid-cols-6">
           {[
             { label: "Guilds", value: data.overview?.guilds ?? 0 },
             { label: "Repositories", value: data.overview?.repositories ?? 0 },
+            { label: "Channels", value: data.overview?.channels ?? 0 },
             { label: "Webhooks", value: data.overview?.webhook_configs ?? 0 },
             { label: "Summaries", value: data.overview?.summary_configs ?? data.summaryConfigs.length },
-            { label: "Channels", value: data.overview?.channels ?? 0 },
+            { label: "Leaderboard", value: data.overview?.leaderboard_entries ?? 0 },
           ].map((card) => (
             <div
               key={card.label}

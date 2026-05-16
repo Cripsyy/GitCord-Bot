@@ -4,6 +4,7 @@ export type Overview = {
   channels: number;
   webhook_configs: number;
   summary_configs: number;
+  leaderboard_entries: number;
 };
 
 export type Guild = {
@@ -64,4 +65,28 @@ export type SummaryConfig = {
   include_standups: boolean;
   enabled: boolean;
   created_at: string | null;
+};
+
+export type LeaderboardEntry = {
+  id: string;
+  guild_id: string;
+  github_user: string;
+  discord_user_id: string | null;
+  user_name: string | null;
+  xp: number;
+  level: number;
+};
+
+export type LeaderboardConfig = {
+  id: string;
+  guild_id: string;
+  enabled: boolean;
+  xp_settings: Record<string, number>;
+  role_milestones: LeaderboardRoleMilestone[];
+};
+
+export type LeaderboardRoleMilestone = {
+  level: number;
+  role_name: string;
+  remove_previous: boolean;
 };

@@ -10,10 +10,13 @@ from app.config import Settings
 from app.core.database import get_session
 from app.models.channel import ChannelConfig
 from app.models.guild import GuildConfig
+from app.models.leaderboard_config import LeaderboardConfig
+from app.models.leaderboard_entry import LeaderboardEntry
 from app.models.standup_entry import StandupEntry
 from app.models.summary_config import SummaryConfig
 from app.models.webhook_config import WebhookConfig
 from app.services.github_webhooks import delete_github_webhook, ensure_github_webhook
+from app.services.leaderboard import award_xp
 from app.services.oauth_clients import fetch_discord_identity, fetch_github_repos
 from app.services.oauth_tokens import get_oauth_token
 
@@ -120,12 +123,15 @@ async def dashboard_overview(request: Request) -> dict[str, int]:
         guilds = session.query(GuildConfig).count()
         channels = session.query(ChannelConfig).count()
         webhooks = session.query(WebhookConfig).count()
+        leaderboard_entries = session.query(LeaderboardEntry).count()
         break
     return {
         "guilds": guilds,
         "repositories": repo_count,
         "channels": channels,
         "webhook_configs": webhooks,
+        "summary_configs": 0,
+        "leaderboard_entries": leaderboard_entries,
     }
 
 
@@ -697,4 +703,88 @@ async def list_standups(request: Request, guild_id: str, date: str | None = None
             }
             for e in entries
         ]
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+@router.get("/leaderboard")
+async def list_leaderboard(request: Request, guild_id: str | None = None) -> list[dict[str, object]]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+    for session in get_session(settings):
+        query = session.query(LeaderboardEntry).order_by(LeaderboardEntry.xp.desc())
+        if guild_id:
+            query = query.filter(LeaderboardEntry.guild_id == guild_id)
+        entries = query.all()
+        break
+    return [
+        {
+            "id": str(e.id),
+            "guild_id": str(e.guild_id),
+            "github_user": e.github_user,
+            "discord_user_id": e.discord_user_id,
+            "user_name": e.user_name,
+            "xp": e.xp,
+            "level": e.level,
+        }
+        for e in entries
+    ]
+
+
+@router.get("/leaderboard/config")
+async def get_leaderboard_config(request: Request, guild_id: str) -> dict[str, object] | None:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+    for session in get_session(settings):
+        config = (
+            session.query(LeaderboardConfig)
+            .filter(LeaderboardConfig.guild_id == guild_id)
+            .one_or_none()
+        )
+        if config is None:
+            return None
+        return {
+            "id": str(config.id),
+            "guild_id": str(config.guild_id),
+            "enabled": config.enabled,
+            "xp_settings": config.xp_settings,
+            "role_milestones": config.role_milestones,
+        }
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+@router.post("/leaderboard/config", status_code=status.HTTP_201_CREATED)
+async def upsert_leaderboard_config(request: Request, payload: dict[str, object]) -> dict[str, object]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+
+    guild_id = str(payload.get("guild_id") or "").strip()
+    if not guild_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="guild_id required")
+
+    for session in get_session(settings):
+        config = (
+            session.query(LeaderboardConfig)
+            .filter(LeaderboardConfig.guild_id == guild_id)
+            .one_or_none()
+        )
+        if config is None:
+            config = LeaderboardConfig(guild_id=guild_id)
+            session.add(config)
+
+        if "enabled" in payload:
+            config.enabled = bool(payload["enabled"])
+        if "xp_settings" in payload and isinstance(payload["xp_settings"], dict):
+            config.xp_settings = payload["xp_settings"]
+        if "role_milestones" in payload and isinstance(payload["role_milestones"], list):
+            config.role_milestones = payload["role_milestones"]
+
+        session.commit()
+        session.refresh(config)
+        return {
+            "id": str(config.id),
+            "guild_id": str(config.guild_id),
+            "enabled": config.enabled,
+            "xp_settings": config.xp_settings,
+            "role_milestones": config.role_milestones,
+        }
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")

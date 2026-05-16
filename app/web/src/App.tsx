@@ -3,6 +3,8 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import WebhookConfigurations from "./pages/WebhookConfigurations";
 import AutomatedSummaries from "./pages/AutomatedSummaries";
+import Leaderboard from "./pages/Leaderboard";
+import LeaderboardConfigPage from "./pages/LeaderboardConfigPage";
 
 function App() {
   const location = useLocation();
@@ -20,6 +22,8 @@ function App() {
           <Route path="/configurations" element={<Navigate to="/configurations/webhooks" />} />
           <Route path="/configurations/webhooks" element={<WebhookConfigurations />} />
           <Route path="/configurations/summaries" element={<AutomatedSummaries />} />
+          <Route path="/configurations/leaderboard" element={<LeaderboardConfigPage />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="*" element={<Dashboard />} />
         </Routes>
       </div>

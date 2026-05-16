@@ -11,6 +11,7 @@ from app.core.database import get_session
 from app.models.webhook_config import WebhookConfig
 from app.models.webhook_event import WebhookEvent
 from app.services.ai_summary import fetch_pull_request_diff, summarize_pull_request_diff
+from app.services.leaderboard import award_xp
 from app.services.signature import is_valid_github_signature
 
 router = APIRouter(prefix="/webhooks", tags=["github"])
@@ -215,3 +216,12 @@ def _log_webhook_event(
         session.add(event)
         session.commit()
         break
+
+    if sender and event_type:
+        award_xp(
+            settings,
+            guild_id=guild_id,
+            github_user=sender,
+            event_type=event_type,
+            action=action,
+        )

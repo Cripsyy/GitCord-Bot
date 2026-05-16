@@ -74,6 +74,28 @@ def create_app(settings: Settings, bot_client: DiscordAssistantClient) -> FastAP
             if file_path.exists() and file_path.is_file():
                 return FileResponse(file_path)
             return FileResponse(web_root / "index.html")
+
+        @app.get("/leaderboard", include_in_schema=False)
+        async def leaderboard_index() -> FileResponse:
+            return FileResponse(web_root / "index.html")
+
+        @app.get("/leaderboard/{full_path:path}", include_in_schema=False)
+        async def leaderboard_assets(full_path: str) -> FileResponse:
+            file_path = web_root / full_path
+            if file_path.exists() and file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(web_root / "index.html")
+
+        @app.get("/configurations/leaderboard", include_in_schema=False)
+        async def configurations_leaderboard_index() -> FileResponse:
+            return FileResponse(web_root / "index.html")
+
+        @app.get("/configurations/leaderboard/{full_path:path}", include_in_schema=False)
+        async def configurations_leaderboard_assets(full_path: str) -> FileResponse:
+            file_path = web_root / full_path
+            if file_path.exists() and file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(web_root / "index.html")
     else:
         @app.get("/", include_in_schema=False)
         async def dashboard_root_unavailable() -> dict[str, str]:

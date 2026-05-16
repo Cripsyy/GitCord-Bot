@@ -1,6 +1,8 @@
 from app.models.base import Base
 from app.models.channel import ChannelConfig
 from app.models.guild import GuildConfig
+from app.models.leaderboard_config import LeaderboardConfig
+from app.models.leaderboard_entry import LeaderboardEntry
 from app.models.log import AppLog
 from app.models.oauth_token import OAuthToken
 from app.models.repository import RepositoryConfig
@@ -20,4 +22,6 @@ __all__ = [
     "StandupEntry",
     "SummaryConfig",
     "WebhookConfig",
+    "LeaderboardConfig",
+    "LeaderboardEntry",
 ]

@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { HomeIcon, GearIcon, ClipboardIcon, WebhookIcon, ChevronIcon } from "./Icons";
+import { HomeIcon, GearIcon, ClipboardIcon, WebhookIcon, TrophyIcon, ChevronIcon } from "./Icons";
 
 const topNavItems = [
   { label: "Overview", path: "/dashboard", icon: <HomeIcon /> },
+  { label: "Leaderboard", path: "/leaderboard", icon: <TrophyIcon /> },
   { label: "Configurations", path: "/configurations", icon: <GearIcon />, hasSubItems: true },
 ];
 
 const configSubItems = [
   { label: "Webhooks", path: "/configurations/webhooks", icon: <WebhookIcon /> },
   { label: "Summaries", path: "/configurations/summaries", icon: <ClipboardIcon /> },
+  { label: "Leaderboard", path: "/configurations/leaderboard", icon: <TrophyIcon /> },
 ];
 
 function Sidebar({ currentPath }: { currentPath: string }) {
