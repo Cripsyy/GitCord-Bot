@@ -81,6 +81,9 @@ export type LeaderboardConfig = {
   id: string;
   guild_id: string;
   enabled: boolean;
+  base_xp: number;
+  start_increment: number;
+  increment_step: number;
   xp_settings: Record<string, number>;
   role_milestones: LeaderboardRoleMilestone[];
 };

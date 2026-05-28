@@ -746,6 +746,9 @@ async def get_leaderboard_config(request: Request, guild_id: str) -> dict[str, o
             "id": str(config.id),
             "guild_id": str(config.guild_id),
             "enabled": config.enabled,
+            "base_xp": config.base_xp,
+            "start_increment": config.start_increment,
+            "increment_step": config.increment_step,
             "xp_settings": config.xp_settings,
             "role_milestones": config.role_milestones,
         }
@@ -773,6 +776,12 @@ async def upsert_leaderboard_config(request: Request, payload: dict[str, object]
 
         if "enabled" in payload:
             config.enabled = bool(payload["enabled"])
+        if "base_xp" in payload and isinstance(payload["base_xp"], (int, float)):
+            config.base_xp = int(payload["base_xp"])
+        if "start_increment" in payload and isinstance(payload["start_increment"], (int, float)):
+            config.start_increment = int(payload["start_increment"])
+        if "increment_step" in payload and isinstance(payload["increment_step"], (int, float)):
+            config.increment_step = int(payload["increment_step"])
         if "xp_settings" in payload and isinstance(payload["xp_settings"], dict):
             config.xp_settings = payload["xp_settings"]
         if "role_milestones" in payload and isinstance(payload["role_milestones"], list):
@@ -784,6 +793,9 @@ async def upsert_leaderboard_config(request: Request, payload: dict[str, object]
             "id": str(config.id),
             "guild_id": str(config.guild_id),
             "enabled": config.enabled,
+            "base_xp": config.base_xp,
+            "start_increment": config.start_increment,
+            "increment_step": config.increment_step,
             "xp_settings": config.xp_settings,
             "role_milestones": config.role_milestones,
         }

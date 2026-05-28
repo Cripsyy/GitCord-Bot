@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, JSON, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -12,6 +12,9 @@ class LeaderboardConfig(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    base_xp: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    start_increment: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    increment_step: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     xp_settings: Mapped[dict] = mapped_column(
         JSON,
         nullable=False,

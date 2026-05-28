@@ -4,6 +4,8 @@ import Navbar from "../components/Navbar";
 import SearchDropdown from "../components/SearchDropdown";
 import ConfigView from "../components/ConfigView";
 import type { SortDef } from "../components/ConfigView";
+import Toggle from "../components/Toggle";
+import CheckButton from "../components/CheckButton";
 import { fetchJson } from "../lib/api";
 
 type PageData = {
@@ -340,34 +342,29 @@ function AutomatedSummaries() {
 
               <div>
                 <p className="mb-1.5 text-xs text-discord-500">Include in Briefing</p>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2">
                   {[
                     { key: "include_prs", label: "Open PRs Needing Review" },
                     { key: "include_issues", label: "Unassigned Issues" },
                     { key: "include_standups", label: "Yesterday's Standups" },
                   ].map((item) => (
-                    <label key={item.key} className="flex cursor-pointer items-center gap-1.5 text-xs text-discord-300">
-                      <input
-                        type="checkbox"
-                        checked={form[item.key as keyof FormState] as boolean}
-                        onChange={(e) => updateForm(item.key as keyof FormState, e.target.checked)}
-                        className="rounded border-white/10"
-                      />
+                    <CheckButton
+                      key={item.key}
+                      checked={form[item.key as keyof FormState] as boolean}
+                      onChange={() => updateForm(item.key as keyof FormState, !form[item.key as keyof FormState])}
+                    >
                       {item.label}
-                    </label>
+                    </CheckButton>
                   ))}
                 </div>
               </div>
 
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-discord-300">
-                <input
-                  type="checkbox"
-                  checked={form.enabled}
-                  onChange={(e) => updateForm("enabled", e.target.checked)}
-                  className="rounded border-white/10"
-                />
+              <Toggle
+                checked={form.enabled}
+                onChange={(checked) => updateForm("enabled", checked)}
+              >
                 Enabled
-              </label>
+              </Toggle>
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-2">

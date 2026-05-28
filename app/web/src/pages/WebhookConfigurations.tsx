@@ -4,6 +4,9 @@ import Navbar from "../components/Navbar";
 import SearchDropdown from "../components/SearchDropdown";
 import ConfigView from "../components/ConfigView";
 import type { SortDef } from "../components/ConfigView";
+import Toggle from "../components/Toggle";
+import CheckButton from "../components/CheckButton";
+import NumberStepper from "../components/NumberStepper";
 import { fetchJson } from "../lib/api";
 
 type PageData = {
@@ -402,43 +405,38 @@ function WebhookConfigurations() {
 
               <div>
                 <p className="mb-1.5 text-xs text-discord-500">Events</p>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2">
                   {ALL_EVENTS.map((event) => (
-                    <label key={event} className="flex cursor-pointer items-center gap-1.5 text-xs text-discord-300">
-                      <input
-                        type="checkbox"
-                        checked={form.events.includes(event)}
-                        onChange={() => toggleEvent(event)}
-                        className="rounded border-white/10"
-                      />
+                    <CheckButton
+                      key={event}
+                      checked={form.events.includes(event)}
+                      onChange={() => toggleEvent(event)}
+                    >
                       {event === "pull_request" ? "Pull Request" : event.charAt(0).toUpperCase() + event.slice(1)}
-                    </label>
+                    </CheckButton>
                   ))}
                 </div>
               </div>
 
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-discord-300">
-                <input
-                  type="checkbox"
+              <div>
+                <Toggle
                   checked={form.ai_summary_enabled}
-                  onChange={(e) => updateForm("ai_summary_enabled", e.target.checked)}
-                  className="rounded border-white/10"
-                />
-                AI Summary Enabled
-              </label>
+                  onChange={(checked) => updateForm("ai_summary_enabled", checked)}
+                >
+                  AI Summary Enabled
+                </Toggle>
 
-              {form.ai_summary_enabled ? (
-                <label className="text-xs text-discord-500">
-                  AI Max Diff Characters
-                  <input
-                    type="number"
-                    value={form.ai_max_diff_chars}
-                    onChange={(e) => updateForm("ai_max_diff_chars", Number(e.target.value))}
-                    className="mt-1 w-full rounded-lg border border-white/10 bg-discord-900 px-3 py-2 text-sm text-discord-200 outline-none focus:border-discord-blurple"
-                  />
-                </label>
-              ) : null}
-
+                {form.ai_summary_enabled ? (
+                  <div>
+                    <p className="mb-1.5 text-xs text-discord-500">AI Max Diff Characters</p>
+                    <NumberStepper
+                      value={form.ai_max_diff_chars}
+                      onChange={(v) => updateForm("ai_max_diff_chars", v)}
+                      step={100}
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-2">
