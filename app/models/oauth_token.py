@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -21,3 +21,7 @@ class OAuthToken(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+    @property
+    def is_expired(self) -> bool:
+        return self.expires_at is not None and datetime.now(timezone.utc) >= self.expires_at

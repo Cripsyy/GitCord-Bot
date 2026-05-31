@@ -1,3 +1,4 @@
+from app.models.account_link import AccountLink
 from app.models.base import Base
 from app.models.channel import ChannelConfig
 from app.models.guild import GuildConfig
@@ -12,6 +13,7 @@ from app.models.webhook_config import WebhookConfig
 from app.models.webhook_event import WebhookEvent
 
 __all__ = [
+    "AccountLink",
     "Base",
     "AppLog",
     "WebhookEvent",

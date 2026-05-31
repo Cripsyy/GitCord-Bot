@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Channel, Guild, Overview, Repository, WebhookConfig, SummaryConfig } from "../types";
+import type { Channel, Guild, Overview, Repository, WebhookConfig, SummaryConfig, SessionInfo } from "../types";
 import Navbar from "../components/Navbar";
 import DashboardSection from "../components/DashboardSection";
 import { fetchJson } from "../lib/api";
@@ -25,19 +25,22 @@ const emptyState: DashboardState = {
 function Dashboard() {
   const [status, setStatus] = useState("Loading...");
   const [data, setData] = useState<DashboardState>(emptyState);
+  const [session, setSession] = useState<SessionInfo | null>(null);
 
   async function loadDashboard() {
     setStatus("Loading data...");
     try {
-      const [overview, guilds, repositories, webhooks, channels, summaryConfigs] = await Promise.all([
+      const [overview, guilds, repositories, webhooks, channels, summaryConfigs, sessionInfo] = await Promise.all([
         fetchJson<Overview>("/api/dashboard/overview"),
         fetchJson<Guild[]>("/api/dashboard/guilds"),
         fetchJson<Repository[]>("/api/dashboard/repositories"),
         fetchJson<WebhookConfig[]>("/api/dashboard/webhooks"),
         fetchJson<Channel[]>("/api/dashboard/channels"),
         fetchJson<SummaryConfig[]>("/api/dashboard/summary-configs"),
+        fetchJson<SessionInfo>("/api/dashboard/session"),
       ]);
       setData({ overview, guilds, repositories, webhooks, channels, summaryConfigs });
+      setSession(sessionInfo);
       setStatus("Live");
     } catch (error) {
       setStatus(`Error: ${(error as Error).message}`);
@@ -53,6 +56,29 @@ function Dashboard() {
       <Navbar title="Server Dashboard" />
 
       <main className="flex-1 overflow-y-auto space-y-6 px-6 py-6">
+        {session?.discord_expired ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-3">
+            <p className="text-sm text-amber-200">
+              Your Discord OAuth token has expired.{" "}
+              <a href="/api/oauth/discord/login" className="font-semibold underline">
+                Reconnect Discord
+              </a>{" "}
+              to restore full functionality.
+            </p>
+          </div>
+        ) : null}
+        {session?.github_expired ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-3">
+            <p className="text-sm text-amber-200">
+              Your GitHub OAuth token has expired.{" "}
+              <a href="/api/oauth/github/login" className="font-semibold underline">
+                Reconnect GitHub
+              </a>{" "}
+              to restore full functionality.
+            </p>
+          </div>
+        ) : null}
+
         <section className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-4 shadow-soft">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>

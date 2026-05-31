@@ -11,26 +11,16 @@ const MEDAL_TEXT_CLASSES = ["text-[#FFD700]", "text-[#C0C0C0]", "text-[#CD7F32]"
 const MEDAL_BG_CLASSES = ["bg-[#FFD700]", "bg-[#C0C0C0]", "bg-[#CD7F32]"];
 
 export default function Podium({ entries, guilds }: PodiumProps) {
-  if (entries.length === 0) return null;
+  if (entries.length < 3) return null;
 
-  // Reorder to [2nd, 1st, 3rd] for the visual layout
-  const slots: { entry: LeaderboardEntry; index: number }[] = [];
-  if (entries.length >= 2) slots.push({ entry: entries[1], index: 1 });
-  slots.push({ entry: entries[0], index: 0 });
-  if (entries.length >= 3) slots.push({ entry: entries[2], index: 2 });
-
-  const colCount = slots.length;
+  const slots = [
+    { entry: entries[1], index: 1 },
+    { entry: entries[0], index: 0 },
+    { entry: entries[2], index: 2 },
+  ];
 
   return (
-    <div
-      className={`grid gap-3 sm:gap-5 items-end ${
-        colCount === 3
-          ? "grid-cols-3"
-          : colCount === 2
-          ? "grid-cols-2 max-w-sm mx-auto"
-          : "grid-cols-1 max-w-[240px] mx-auto"
-      }`}
-    >
+    <div className="grid gap-3 sm:gap-5 items-end grid-cols-3">
       {slots.map(({ entry, index }) => {
         const guildName = guilds.find((g) => String(g.id) === entry.guild_id)?.name;
         const isFirst = index === 0;

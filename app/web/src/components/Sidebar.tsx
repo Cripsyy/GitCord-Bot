@@ -20,7 +20,7 @@ function Sidebar({ currentPath }: { currentPath: string }) {
   return (
     <aside className="hidden w-[260px] flex-col border-r border-white/5 bg-discord-950 px-4 py-4 lg:flex">
       <div className="flex items-center gap-3 px-3 pb-3 h-20 w-20">
-        <img src="/dashboard/Logo/gitcord-logo.png" alt="GitCord" className="object-fill" />
+        <img src="../../public/Logo/gitcord-logo.png" alt="GitCord" className="object-fill" />
         <span className="text-xl font-display text-discord-200">GitCord</span>
       </div>
       <div className="mt-6 space-y-1 text-sm">

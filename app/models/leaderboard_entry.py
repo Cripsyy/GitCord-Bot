@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -8,6 +8,9 @@ from app.models.base import Base
 
 class LeaderboardEntry(Base):
     __tablename__ = "leaderboard_entries"
+    __table_args__ = (
+        UniqueConstraint("guild_id", "github_user", name="uq_leaderboard_guild_github"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     guild_id: Mapped[str] = mapped_column(String(32), nullable=False)

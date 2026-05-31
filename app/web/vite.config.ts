@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/dashboard/",
+  base: "./",
   build: {
     outDir: "dist",
   },
@@ -11,5 +11,9 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
+    allowedHosts: true,
+    watch: {
+      usePolling: true,
+    },
   },
 });

@@ -45,6 +45,8 @@ export type Profile = {
 export type SessionInfo = {
   discord_connected: boolean;
   github_connected: boolean;
+  discord_expired: boolean;
+  github_expired: boolean;
 };
 
 export type Channel = {

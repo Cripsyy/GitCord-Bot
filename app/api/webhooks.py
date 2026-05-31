@@ -103,6 +103,8 @@ async def github_webhook_listener(request: Request, guild_id: str, secret_slug: 
             event_type=event_type,
             payload=payload,
             matching_configs=matching_configs,
+            sender=sender,
+            action=action,
         )
     )
 
@@ -116,7 +118,43 @@ async def _process_webhook_event(
     event_type: str,
     payload: dict,
     matching_configs: list[WebhookConfig],
+    sender: str | None,
+    action: str | None,
 ) -> None:
+    if sender and event_type:
+        seen_guilds: set[str] = set()
+        for config in matching_configs:
+            if config.guild_id in seen_guilds:
+                continue
+            seen_guilds.add(config.guild_id)
+            result = await asyncio.to_thread(
+                award_xp,
+                settings,
+                guild_id=config.guild_id,
+                github_user=sender,
+                event_type=event_type,
+                action=action,
+            )
+            for ma in result.milestone_actions:
+                try:
+                    if ma.action_type == "assign":
+                        await bot_client.assign_milestone_role(
+                            guild_id=ma.guild_id,
+                            discord_user_id=ma.discord_user_id,
+                            role_name=ma.role_name,
+                        )
+                    elif ma.action_type == "remove":
+                        await bot_client.remove_milestone_role(
+                            guild_id=ma.guild_id,
+                            discord_user_id=ma.discord_user_id,
+                            role_name=ma.role_name,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Failed to %s milestone role '%s' for %s in guild %s",
+                        ma.action_type, ma.role_name, ma.discord_user_id, ma.guild_id,
+                    )
+
     if event_type == "pull_request":
         pull_request_action = payload.get("action")
         pull_request_number = payload.get("pull_request", {}).get("number")
@@ -216,12 +254,3 @@ def _log_webhook_event(
         session.add(event)
         session.commit()
         break
-
-    if sender and event_type:
-        award_xp(
-            settings,
-            guild_id=guild_id,
-            github_user=sender,
-            event_type=event_type,
-            action=action,
-        )

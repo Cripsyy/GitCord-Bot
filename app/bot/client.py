@@ -34,6 +34,7 @@ class DiscordAssistantClient(commands.Bot):
             return
 
         self.logger.info("Connected to Discord as %s (%s)", self.user, self.user.id)
+        await self._sync_guild_configs()
         await self.sync_guild_channels()
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
@@ -44,6 +45,17 @@ class DiscordAssistantClient(commands.Bot):
                 session.commit()
             break
         await self.sync_guild_channels(guild)
+
+    async def _sync_guild_configs(self) -> None:
+        for guild in self.guilds:
+            for session in get_session(self.settings):
+                existing = session.get(GuildConfig, str(guild.id))
+                if existing is None:
+                    session.add(GuildConfig(id=str(guild.id), name=guild.name))
+                elif guild.name and existing.name != guild.name:
+                    existing.name = guild.name
+                session.commit()
+                break
 
     async def sync_guild_channels(self, guild: discord.Guild | None = None) -> None:
         guilds = [guild] if guild else list(self.guilds)
@@ -84,6 +96,82 @@ class DiscordAssistantClient(commands.Bot):
 
             session.commit()
             break
+
+    async def assign_milestone_role(
+        self,
+        guild_id: str,
+        discord_user_id: str,
+        role_name: str,
+    ) -> bool:
+        guild = self.get_guild(int(guild_id))
+        if guild is None:
+            self.logger.warning("Guild %s not found for milestone role assignment", guild_id)
+            return False
+
+        member = guild.get_member(int(discord_user_id))
+        if member is None:
+            self.logger.warning(
+                "Member %s not found in guild %s for milestone role assignment",
+                discord_user_id, guild_id,
+            )
+            return False
+
+        role = discord.utils.get(guild.roles, name=role_name)
+        if role is None:
+            self.logger.warning(
+                "Role '%s' not found in guild %s. Creating it.", role_name, guild_id,
+            )
+            try:
+                role = await guild.create_role(name=role_name, reason="Leaderboard milestone")
+            except Exception:
+                self.logger.exception("Failed to create role '%s' in guild %s", role_name, guild_id)
+                return False
+
+        try:
+            await member.add_roles(role, reason=f"Leaderboard milestone level reached")
+            self.logger.info(
+                "Assigned milestone role '%s' to %s in guild %s",
+                role_name, discord_user_id, guild_id,
+            )
+            return True
+        except Exception:
+            self.logger.exception(
+                "Failed to assign role '%s' to %s in guild %s",
+                role_name, discord_user_id, guild_id,
+            )
+            return False
+
+    async def remove_milestone_role(
+        self,
+        guild_id: str,
+        discord_user_id: str,
+        role_name: str,
+    ) -> bool:
+        guild = self.get_guild(int(guild_id))
+        if guild is None:
+            return False
+
+        member = guild.get_member(int(discord_user_id))
+        if member is None:
+            return False
+
+        role = discord.utils.get(guild.roles, name=role_name)
+        if role is None:
+            return False
+
+        try:
+            await member.remove_roles(role, reason="Leaderboard milestone surpassed")
+            self.logger.info(
+                "Removed previous milestone role '%s' from %s in guild %s",
+                role_name, discord_user_id, guild_id,
+            )
+            return True
+        except Exception:
+            self.logger.exception(
+                "Failed to remove role '%s' from %s in guild %s",
+                role_name, discord_user_id, guild_id,
+            )
+            return False
 
     async def on_disconnect(self) -> None:
         self.logger.warning("Discord client disconnected.")

@@ -16,9 +16,8 @@ from app.models.standup_entry import StandupEntry
 from app.models.summary_config import SummaryConfig
 from app.models.webhook_config import WebhookConfig
 from app.services.github_webhooks import delete_github_webhook, ensure_github_webhook
-from app.services.leaderboard import award_xp
 from app.services.oauth_clients import fetch_discord_identity, fetch_github_repos
-from app.services.oauth_tokens import get_oauth_token
+from app.services.oauth_tokens import get_oauth_token, is_token_expired
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -30,19 +29,25 @@ def _get_session(request: Request) -> dict[str, bool]:
 
     discord_connected = False
     github_connected = False
+    discord_expired = False
+    github_expired = False
 
     if discord_user_id:
         discord_connected = (
             get_oauth_token(settings, provider="discord", subject_id=discord_user_id) is not None
         )
+        discord_expired = is_token_expired(settings, provider="discord", subject_id=discord_user_id)
     if github_user_id:
         github_connected = (
             get_oauth_token(settings, provider="github", subject_id=github_user_id) is not None
         )
+        github_expired = is_token_expired(settings, provider="github", subject_id=github_user_id)
 
     return {
         "discord_connected": discord_connected,
         "github_connected": github_connected,
+        "discord_expired": discord_expired,
+        "github_expired": github_expired,
     }
 
 
@@ -139,6 +144,8 @@ async def dashboard_overview(request: Request) -> dict[str, int]:
 async def list_guilds(request: Request) -> list[dict[str, object]]:
     _require_full_session(request)
     settings: Settings = request.app.state.settings
+    bot_client = request.app.state.bot_client
+    await bot_client._sync_guild_configs()
     for session in get_session(settings):
         guilds = session.query(GuildConfig).order_by(GuildConfig.created_at.desc()).all()
         break

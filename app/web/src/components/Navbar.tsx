@@ -12,6 +12,8 @@ function Navbar({ title }: NavbarProps) {
   const [sessionInfo, setSessionInfo] = useState<SessionInfo>({
     discord_connected: false,
     github_connected: false,
+    discord_expired: false,
+    github_expired: false,
   });
   const [menuOpen, setMenuOpen] = useState(false);
   const [disconnectingDiscord, setDisconnectingDiscord] = useState(false);
@@ -114,16 +116,16 @@ function Navbar({ title }: NavbarProps) {
           <div className="absolute right-0 top-14 z-10 w-72 rounded-2xl border border-white/5 bg-discord-850 p-3 shadow-soft">
             <div className="flex items-center justify-between rounded-lg border border-white/5 bg-discord-900 px-3 py-2 text-xs">
               <span className="text-discord-500">Discord</span>
-              <span className={`flex items-center gap-1.5 ${sessionInfo.discord_connected ? "text-discord-green" : "text-red-400"}`}>
-                <span className={`h-2 w-2 rounded-full ${sessionInfo.discord_connected ? "bg-discord-green" : "bg-red-400"}`} />
-                {sessionInfo.discord_connected ? "Connected" : "Not Connected"}
+              <span className={`flex items-center gap-1.5 ${sessionInfo.discord_connected && !sessionInfo.discord_expired ? "text-discord-green" : sessionInfo.discord_expired ? "text-amber-400" : "text-red-400"}`}>
+                <span className={`h-2 w-2 rounded-full ${sessionInfo.discord_connected && !sessionInfo.discord_expired ? "bg-discord-green" : sessionInfo.discord_expired ? "bg-amber-400" : "bg-red-400"}`} />
+                {sessionInfo.discord_expired ? "Expired" : sessionInfo.discord_connected ? "Connected" : "Not Connected"}
               </span>
             </div>
             <div className="mt-1.5 flex items-center justify-between rounded-lg border border-white/5 bg-discord-900 px-3 py-2 text-xs">
               <span className="text-discord-500">GitHub</span>
-              <span className={`flex items-center gap-1.5 ${sessionInfo.github_connected ? "text-discord-green" : "text-red-400"}`}>
-                <span className={`h-2 w-2 rounded-full ${sessionInfo.github_connected ? "bg-discord-green" : "bg-red-400"}`} />
-                {sessionInfo.github_connected ? "Connected" : "Not Connected"}
+              <span className={`flex items-center gap-1.5 ${sessionInfo.github_connected && !sessionInfo.github_expired ? "text-discord-green" : sessionInfo.github_expired ? "text-amber-400" : "text-red-400"}`}>
+                <span className={`h-2 w-2 rounded-full ${sessionInfo.github_connected && !sessionInfo.github_expired ? "bg-discord-green" : sessionInfo.github_expired ? "bg-amber-400" : "bg-red-400"}`} />
+                {sessionInfo.github_expired ? "Expired" : sessionInfo.github_connected ? "Connected" : "Not Connected"}
               </span>
             </div>
 

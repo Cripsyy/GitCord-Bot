@@ -46,7 +46,7 @@ function Leaderboard() {
   }, [guildFilter]);
 
   const podiumEntries = entries.slice(0, 3);
-  const remainingEntries = entries.slice(3);
+  const showPodium = entries.length >= 3;
 
   function getSearchText(entry: LeaderboardEntry): string {
     return `${entry.github_user} ${entry.user_name ?? ""} ${entry.guild_id}`;
@@ -57,11 +57,9 @@ function Leaderboard() {
     label: g.name ?? `Guild ${g.id}`,
   }));
 
-  const sortedRemaining = [...remainingEntries]
-    .filter((entry) =>
-      getSearchText(entry).toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    .sort((a, b) => b.xp - a.xp);
+  const filteredEntries = entries.filter((entry) =>
+    getSearchText(entry).toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   function toggleExpand(id: string) {
     setExpandedIds((prev) => {
@@ -119,17 +117,21 @@ function Leaderboard() {
           <p className="text-sm text-discord-500">Loading...</p>
         ) : (
           <>
-            <Podium entries={podiumEntries} guilds={guilds} />
+            {showPodium && <Podium entries={podiumEntries} guilds={guilds} />}
 
-            {sortedRemaining.length === 0 ? (
+            {entries.length === 0 ? (
               <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-8 text-center">
                 <p className="text-sm text-discord-500">
                   No leaderboard entries yet. Data will appear once GitHub webhook events are processed.
                 </p>
               </div>
+            ) : filteredEntries.length === 0 ? (
+              <div className="rounded-2xl border border-white/5 bg-discord-850 px-5 py-8 text-center">
+                <p className="text-sm text-discord-500">No results match your search.</p>
+              </div>
             ) : (
               <ConfigList>
-                {sortedRemaining.map((entry) => {
+                {filteredEntries.map((entry) => {
                   const guildName = guilds.find((g) => String(g.id) === entry.guild_id)?.name;
                   const rank = entries.indexOf(entry) + 1;
                   const isExpanded = expandedIds.has(entry.id);

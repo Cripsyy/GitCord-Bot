@@ -67,3 +67,29 @@ def get_oauth_token(
         )
         return token
     return None
+
+
+def get_valid_oauth_token(
+    settings: Settings,
+    *,
+    provider: str,
+    subject_id: str,
+) -> OAuthToken | None:
+    token = get_oauth_token(settings, provider=provider, subject_id=subject_id)
+    if token is None:
+        return None
+    if token.is_expired:
+        return None
+    return token
+
+
+def is_token_expired(
+    settings: Settings,
+    *,
+    provider: str,
+    subject_id: str,
+) -> bool:
+    token = get_oauth_token(settings, provider=provider, subject_id=subject_id)
+    if token is None:
+        return False
+    return token.is_expired

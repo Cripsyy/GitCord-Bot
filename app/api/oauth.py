@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 from fastapi.responses import RedirectResponse
 
 from app.config import Settings
+from app.core.database import get_session
+from app.models.account_link import AccountLink
 from app.services.oauth_clients import (
     build_discord_authorize_url,
     build_github_authorize_url,
@@ -104,6 +106,25 @@ async def discord_callback(request: Request, code: str | None = None, state: str
         scopes=token_payload.get("scope"),
         expires_in=token_payload.get("expires_in"),
     )
+
+    github_login_cookie = request.cookies.get("github_login")
+    if github_login_cookie:
+        for session in get_session(settings):
+            existing = (
+                session.query(AccountLink)
+                .filter(AccountLink.github_login == github_login_cookie)
+                .one_or_none()
+            )
+            if existing is None:
+                session.add(AccountLink(
+                    discord_user_id=subject_id,
+                    github_login=github_login_cookie,
+                ))
+            else:
+                existing.discord_user_id = subject_id
+            session.commit()
+            break
+
     response = RedirectResponse(url="/dashboard", status_code=302)
     response.set_cookie("discord_user_id", subject_id, httponly=True, samesite="lax", path="/")
     response.set_cookie("discord_oauth_state", "", max_age=0, path="/")
@@ -161,8 +182,30 @@ async def github_callback(request: Request, code: str | None = None, state: str 
         scopes=token_payload.get("scope"),
         expires_in=None,
     )
+
+    github_login = identity.get("login")
+    discord_cookie = request.cookies.get("discord_user_id")
+    if github_login and discord_cookie:
+        for session in get_session(settings):
+            existing = (
+                session.query(AccountLink)
+                .filter(AccountLink.github_login == github_login)
+                .one_or_none()
+            )
+            if existing is None:
+                session.add(AccountLink(
+                    discord_user_id=discord_cookie,
+                    github_login=github_login,
+                ))
+            else:
+                existing.discord_user_id = discord_cookie
+            session.commit()
+            break
+
     response = RedirectResponse(url="/dashboard", status_code=302)
     response.set_cookie("github_user_id", subject_id, httponly=True, samesite="lax", path="/")
+    if github_login:
+        response.set_cookie("github_login", github_login, httponly=True, samesite="lax", path="/")
     response.set_cookie("github_oauth_state", "", max_age=0, path="/")
     response.set_cookie("github_oauth_redirect", "", max_age=0, path="/")
     return response
@@ -181,6 +224,7 @@ async def disconnect_discord() -> JSONResponse:
 async def disconnect_github() -> JSONResponse:
     response = JSONResponse({"ok": True})
     response.set_cookie("github_user_id", "", max_age=0, path="/")
+    response.set_cookie("github_login", "", max_age=0, path="/")
     response.set_cookie("github_oauth_state", "", max_age=0, path="/")
     response.set_cookie("github_oauth_redirect", "", max_age=0, path="/")
     return response
@@ -191,6 +235,7 @@ async def reset_oauth_session() -> JSONResponse:
     response = JSONResponse({"ok": True})
     response.set_cookie("discord_user_id", "", max_age=0, path="/")
     response.set_cookie("github_user_id", "", max_age=0, path="/")
+    response.set_cookie("github_login", "", max_age=0, path="/")
     response.set_cookie("discord_oauth_state", "", max_age=0, path="/")
     response.set_cookie("github_oauth_state", "", max_age=0, path="/")
     response.set_cookie("discord_oauth_redirect", "", max_age=0, path="/")
