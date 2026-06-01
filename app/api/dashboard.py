@@ -792,10 +792,17 @@ async def upsert_leaderboard_config(request: Request, payload: dict[str, object]
         if "xp_settings" in payload and isinstance(payload["xp_settings"], dict):
             config.xp_settings = payload["xp_settings"]
         if "role_milestones" in payload and isinstance(payload["role_milestones"], list):
+            old_role_names = [m.get("role_name", "") for m in (config.role_milestones or [])]
             config.role_milestones = payload["role_milestones"]
 
         session.commit()
         session.refresh(config)
+
+        if "role_milestones" in payload and isinstance(payload["role_milestones"], list):
+            bot_client = request.app.state.bot_client
+            if bot_client is not None:
+                await bot_client.sync_milestone_roles(guild_id, payload["role_milestones"], old_role_names)
+
         return {
             "id": str(config.id),
             "guild_id": str(config.guild_id),

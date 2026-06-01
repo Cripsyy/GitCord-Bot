@@ -142,6 +142,8 @@ async def _process_webhook_event(
                             guild_id=ma.guild_id,
                             discord_user_id=ma.discord_user_id,
                             role_name=ma.role_name,
+                            color=ma.color,
+                            hoist=ma.hoist,
                         )
                     elif ma.action_type == "remove":
                         await bot_client.remove_milestone_role(

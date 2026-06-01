@@ -94,4 +94,6 @@ export type LeaderboardRoleMilestone = {
   level: number;
   role_name: string;
   remove_previous: boolean;
+  color: string;
+  hoist: boolean;
 };

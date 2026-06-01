@@ -13,6 +13,8 @@ class MilestoneAction:
     discord_user_id: str
     role_name: str
     action_type: str = "assign"
+    color: str = ""
+    hoist: bool = True
 
 
 @dataclass
@@ -147,6 +149,8 @@ def award_xp(
                     ms_level = ms.get("level", 0)
                     ms_role_name = ms.get("role_name", "")
                     ms_remove_prev = ms.get("remove_previous", False)
+                    ms_color = ms.get("color", "")
+                    ms_hoist = ms.get("hoist", True)
                     if ms_role_name:
                         result.milestone_actions.append(
                             MilestoneAction(
@@ -154,6 +158,8 @@ def award_xp(
                                 discord_user_id=discord_id,
                                 role_name=ms_role_name,
                                 action_type="assign",
+                                color=ms_color,
+                                hoist=ms_hoist,
                             )
                         )
                         if ms_remove_prev:

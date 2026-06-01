@@ -25,9 +25,9 @@ const defaultXpSettings: Record<string, number> = {
 };
 
 const defaultMilestones: LeaderboardRoleMilestone[] = [
-  { level: 5, role_name: "Level 5", remove_previous: true },
-  { level: 10, role_name: "Level 10", remove_previous: true },
-  { level: 20, role_name: "Level 20", remove_previous: true },
+  { level: 5, role_name: "Level 5", remove_previous: true, color: "#1abc9c", hoist: true },
+  { level: 10, role_name: "Level 10", remove_previous: true, color: "#3498db", hoist: true },
+  { level: 20, role_name: "Level 20", remove_previous: true, color: "#9b59b6", hoist: true },
 ];
 
 type PageData = {
@@ -46,6 +46,7 @@ function LeaderboardConfigPage() {
   const [modalEnabledEvents, setModalEnabledEvents] = useState<Set<string>>(new Set(Object.keys(defaultXpSettings)));
   const [modalMilestones, setModalMilestones] = useState<LeaderboardRoleMilestone[]>(defaultMilestones);
   const [modalRemovePrevious, setModalRemovePrevious] = useState(true);
+  const [modalHoist, setModalHoist] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -84,9 +85,12 @@ function LeaderboardConfigPage() {
     setEditingGuild(guild);
     setModalXpSettings(existing?.xp_settings ? { ...defaultXpSettings, ...existing.xp_settings } : { ...defaultXpSettings });
     setModalEnabledEvents(new Set(Object.keys(existing?.xp_settings ?? defaultXpSettings)));
-    const milestonesData = existing?.role_milestones ? existing.role_milestones.map((m) => ({ ...m })) : defaultMilestones.map((m) => ({ ...m }));
+    const milestonesData = existing?.role_milestones
+      ? existing.role_milestones.map((m) => ({ ...m })).sort((a, b) => a.level - b.level)
+      : defaultMilestones.map((m) => ({ ...m }));
     setModalMilestones(milestonesData);
     setModalRemovePrevious(milestonesData.length > 0 ? milestonesData[0].remove_previous : true);
+    setModalHoist(milestonesData.length > 0 ? milestonesData[0].hoist : true);
     setFormError("");
     setShowModal(true);
   }
@@ -163,9 +167,11 @@ function LeaderboardConfigPage() {
 
   function addModalMilestone() {
     const maxLevel = modalMilestones.reduce((max, m) => Math.max(max, m.level), 0);
+    const palette = ["#e74c3c", "#e67e22", "#f1c40f", "#2ecc71", "#1abc9c", "#3498db", "#9b59b6", "#34495e"];
+    const nextColor = palette[modalMilestones.length % palette.length];
     setModalMilestones((prev) => [
       ...prev,
-      { level: maxLevel + 5, role_name: `Level ${maxLevel + 5}`, remove_previous: modalRemovePrevious },
+      { level: maxLevel + 5, role_name: `Level ${maxLevel + 5}`, remove_previous: modalRemovePrevious, color: nextColor, hoist: modalHoist },
     ]);
   }
 
@@ -184,7 +190,7 @@ function LeaderboardConfigPage() {
       }
 
       const existing = data.configs[editingGuild.id];
-      const updatedMilestones = modalMilestones.map((m) => ({ ...m, remove_previous: modalRemovePrevious }));
+      const updatedMilestones = modalMilestones.map((m) => ({ ...m, remove_previous: modalRemovePrevious, hoist: modalHoist }));
 
       const response = await fetch("/api/dashboard/leaderboard/config", {
         method: "POST",
@@ -338,7 +344,7 @@ function LeaderboardConfigPage() {
                 <p className="mt-1 text-xs text-discord-500">
                   Enable or disable XP awards per event type. Disabled events will not award XP.
                 </p>
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 space-y-2 max-h-[200px] overflow-y-auto">
                   {XP_EVENTS.map(({ key, label }) => (
                     <div key={key} className="flex items-center gap-3 rounded-xl border border-white/5 bg-discord-900 px-4 py-2.5">
                       <CheckButton
@@ -365,16 +371,23 @@ function LeaderboardConfigPage() {
                   <h3 className="font-display text-base text-discord-200">Role Milestones</h3>
                   <div className="flex items-center gap-3">
                     <CheckButton
+                      checked={modalHoist}
+                      onChange={() => setModalHoist((prev) => !prev)}
+                      size="md"
+                    >
+                      Hoist
+                    </CheckButton>
+                    <CheckButton
                       checked={modalRemovePrevious}
                       onChange={() => setModalRemovePrevious((prev) => !prev)}
-                      size="sm"
+                      size="md"
                     >
                       Remove previous
                     </CheckButton>
                     <button
                       type="button"
                       onClick={addModalMilestone}
-                      className="rounded-lg border border-white/10 bg-discord-800 px-3 py-1.5 text-xs text-discord-400 hover:text-discord-200"
+                      className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-discord-400 hover:text-discord-200"
                     >
                       + Add Milestone
                     </button>
@@ -383,7 +396,7 @@ function LeaderboardConfigPage() {
                 <p className="mt-1 text-xs text-discord-500">
                   Roles assigned when a user reaches a level.
                 </p>
-                <div className="mt-4 space-y-3">
+                <div className="mt-4 max-h-[200px] space-y-2 overflow-y-auto">
                   {modalMilestones.map((m, i) => (
                     <div key={i} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/5 bg-discord-900 px-4 py-3">
                       <label className="text-xs text-discord-500">
@@ -403,6 +416,15 @@ function LeaderboardConfigPage() {
                           value={m.role_name}
                           onChange={(e) => updateModalMilestone(i, "role_name", e.target.value)}
                           className="ml-2 w-40 rounded-lg border border-white/10 bg-discord-850 px-2 py-1.5 text-sm text-discord-200 outline-none focus:border-discord-blurple"
+                        />
+                      </label>
+                      <label className="inline-flex items-center text-xs text-discord-500">
+                        Color
+                        <input
+                          type="color"
+                          value={m.color}
+                          onChange={(e) => updateModalMilestone(i, "color", e.target.value)}
+                          className="ml-2 h-6 w-8 cursor-pointer rounded border border-white/10 bg-transparent p-0.5"
                         />
                       </label>
                       <button

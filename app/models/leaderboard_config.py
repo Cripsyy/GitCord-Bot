@@ -30,9 +30,9 @@ class LeaderboardConfig(Base):
         JSON,
         nullable=False,
         default=lambda: [
-            {"level": 5, "role_name": "Level 5", "remove_previous": True},
-            {"level": 10, "role_name": "Level 10", "remove_previous": True},
-            {"level": 20, "role_name": "Level 20", "remove_previous": True},
+            {"level": 5, "role_name": "Level 5", "remove_previous": True, "color": "#1abc9c", "hoist": True},
+            {"level": 10, "role_name": "Level 10", "remove_previous": True, "color": "#3498db", "hoist": True},
+            {"level": 20, "role_name": "Level 20", "remove_previous": True, "color": "#9b59b6", "hoist": True},
         ],
     )
     created_at: Mapped[datetime] = mapped_column(
