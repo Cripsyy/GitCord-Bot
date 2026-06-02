@@ -11,6 +11,7 @@ from app.models.standup_entry import StandupEntry
 from app.models.summary_config import SummaryConfig
 from app.models.webhook_config import WebhookConfig
 from app.models.webhook_event import WebhookEvent
+from app.models.webhook_subscription import WebhookSubscription
 
 __all__ = [
     "AccountLink",
@@ -24,6 +25,7 @@ __all__ = [
     "StandupEntry",
     "SummaryConfig",
     "WebhookConfig",
+    "WebhookSubscription",
     "LeaderboardConfig",
     "LeaderboardEntry",
 ]

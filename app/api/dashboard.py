@@ -15,6 +15,7 @@ from app.models.leaderboard_entry import LeaderboardEntry
 from app.models.standup_entry import StandupEntry
 from app.models.summary_config import SummaryConfig
 from app.models.webhook_config import WebhookConfig
+from app.models.webhook_subscription import WebhookSubscription
 from app.services.github_webhooks import delete_github_webhook, ensure_github_webhook
 from app.services.oauth_clients import fetch_discord_identity, fetch_github_repos
 from app.services.oauth_tokens import get_oauth_token, is_token_expired
@@ -127,14 +128,16 @@ async def dashboard_overview(request: Request) -> dict[str, int]:
     for session in get_session(settings):
         guilds = session.query(GuildConfig).count()
         channels = session.query(ChannelConfig).count()
-        webhooks = session.query(WebhookConfig).count()
+        connections = session.query(WebhookConfig).count()
+        subscriptions = session.query(WebhookSubscription).count()
         leaderboard_entries = session.query(LeaderboardEntry).count()
         break
     return {
         "guilds": guilds,
         "repositories": repo_count,
         "channels": channels,
-        "webhook_configs": webhooks,
+        "connections": connections,
+        "subscriptions": subscriptions,
         "summary_configs": 0,
         "leaderboard_entries": leaderboard_entries,
     }
@@ -166,32 +169,40 @@ async def list_webhooks(request: Request) -> list[dict[str, object]]:
     _require_full_session(request)
     settings: Settings = request.app.state.settings
     for session in get_session(settings):
-        webhooks = session.query(WebhookConfig).order_by(WebhookConfig.created_at.desc()).all()
+        configs = session.query(WebhookConfig).order_by(WebhookConfig.created_at.desc()).all()
+        results: list[dict[str, object]] = []
+        for config in configs:
+            subs = (
+                session.query(WebhookSubscription)
+                .filter(WebhookSubscription.webhook_config_id == config.id)
+                .all()
+            )
+            results.append({
+                "id": str(config.id),
+                "secret_slug": config.secret_slug,
+                "repository_full_name": config.repository_full_name,
+                "created_at": config.created_at.isoformat() if config.created_at else None,
+                "subscriptions": [
+                    {
+                        "id": str(sub.id),
+                        "guild_id": str(sub.guild_id),
+                        "channel_id": str(sub.channel_id),
+                        "ai_summary_enabled": sub.ai_summary_enabled,
+                        "ai_max_diff_chars": sub.ai_max_diff_chars,
+                        "events": sub.events,
+                    }
+                    for sub in subs
+                ],
+            })
         break
-    return [
-        {
-            "id": str(webhook.id),
-            "guild_id": str(webhook.guild_id),
-            "secret_slug": webhook.secret_slug,
-            "repository_full_name": webhook.repository_full_name,
-            "channel_id": str(webhook.channel_id),
-            "ai_summary_enabled": webhook.ai_summary_enabled,
-            "ai_max_diff_chars": webhook.ai_max_diff_chars,
-            "events": webhook.events,
-            "created_at": webhook.created_at.isoformat() if webhook.created_at else None,
-        }
-        for webhook in webhooks
-    ]
+    return results
 
 
-def _make_unique_slug(session, guild_id: str, desired_slug: str) -> str:
+def _make_unique_slug(session, desired_slug: str) -> str:
     candidate = desired_slug
     while (
         session.query(WebhookConfig)
-        .filter(
-            WebhookConfig.guild_id == guild_id,
-            WebhookConfig.secret_slug == candidate,
-        )
+        .filter(WebhookConfig.secret_slug == candidate)
         .first()
         is not None
     ):
@@ -204,25 +215,19 @@ async def create_webhook(request: Request, payload: dict[str, object]) -> dict[s
     _require_full_session(request)
     settings: Settings = request.app.state.settings
 
-    guild_id = str(payload.get("guild_id") or "").strip()
     repository_full_name = str(payload.get("repository_full_name") or "").strip()
+
+    if not repository_full_name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="repository_full_name is required",
+        )
+
+    initial_subscriptions: list[dict[str, str]] = []
+    guild_id = str(payload.get("guild_id") or "").strip()
     channel_id = str(payload.get("channel_id") or "").strip()
-    ai_summary_enabled = bool(payload.get("ai_summary_enabled", True))
-    ai_max_diff_chars = int(payload.get("ai_max_diff_chars") or 12000)
-    raw_events = payload.get("events")
-    events = raw_events if isinstance(raw_events, list) else ["push", "pull_request", "issues"]
-
-    if not guild_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="guild_id is required",
-        )
-
-    if not repository_full_name or not channel_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="repository_full_name and channel_id are required",
-        )
+    if guild_id and channel_id:
+        initial_subscriptions.append({"guild_id": guild_id, "channel_id": channel_id})
 
     github_user_id = request.cookies.get("github_user_id")
     github_token = None
@@ -232,47 +237,81 @@ async def create_webhook(request: Request, payload: dict[str, object]) -> dict[s
     webhook_url_base = settings.oauth_redirect_base_url.rstrip("/")
 
     for session in get_session(settings):
-        repo_slug = _slugify(repository_full_name)
-        secret_slug = _make_unique_slug(session, guild_id, f"{repo_slug}-{secrets.token_hex(3)}")
-        webhook_secret = secrets.token_urlsafe(32)
-        webhook = WebhookConfig(
-            guild_id=guild_id,
-            secret_slug=secret_slug,
-            webhook_secret=webhook_secret,
-            repository_full_name=repository_full_name,
-            channel_id=channel_id,
-            ai_summary_enabled=ai_summary_enabled,
-            ai_max_diff_chars=ai_max_diff_chars,
-            events=events,
+        config = (
+            session.query(WebhookConfig)
+            .filter(WebhookConfig.repository_full_name == repository_full_name)
+            .first()
         )
-        session.add(webhook)
-        session.commit()
-        session.refresh(webhook)
 
-        if github_token:
-            webhook_url = f"{webhook_url_base}/webhooks/github/{guild_id}/{secret_slug}"
-            webhook_url_prefix = f"{webhook_url_base}/webhooks/github/{guild_id}/"
-            try:
-                await ensure_github_webhook(
-                    access_token=github_token.access_token,
-                    repo_full_name=repository_full_name,
-                    webhook_url=webhook_url,
-                    webhook_secret=webhook_secret,
-                    events=events,
-                    url_prefix=webhook_url_prefix,
+        if config is None:
+            repo_slug = _slugify(repository_full_name)
+            secret_slug = _make_unique_slug(session, f"{repo_slug}-{secrets.token_hex(3)}")
+            webhook_secret = secrets.token_urlsafe(32)
+            config = WebhookConfig(
+                secret_slug=secret_slug,
+                webhook_secret=webhook_secret,
+                repository_full_name=repository_full_name,
+            )
+            session.add(config)
+            session.flush()
+
+            if github_token:
+                webhook_url = f"{webhook_url_base}/webhooks/github/{secret_slug}"
+                webhook_url_prefix = f"{webhook_url_base}/webhooks/github/"
+                try:
+                    await ensure_github_webhook(
+                        access_token=github_token.access_token,
+                        repo_full_name=repository_full_name,
+                        webhook_url=webhook_url,
+                        webhook_secret=webhook_secret,
+                        events=["push", "pull_request", "issues"],
+                        url_prefix=webhook_url_prefix,
+                    )
+                except Exception:
+                    pass
+
+        for sub_info in initial_subscriptions:
+            existing_sub = (
+                session.query(WebhookSubscription)
+                .filter(
+                    WebhookSubscription.webhook_config_id == config.id,
+                    WebhookSubscription.guild_id == sub_info["guild_id"],
+                    WebhookSubscription.channel_id == sub_info["channel_id"],
                 )
-            except Exception:
-                pass
+                .first()
+            )
+            if existing_sub is None:
+                sub = WebhookSubscription(
+                    webhook_config_id=config.id,
+                    guild_id=sub_info["guild_id"],
+                    channel_id=sub_info["channel_id"],
+                )
+                session.add(sub)
 
+        session.commit()
+        session.refresh(config)
+
+        subs = (
+            session.query(WebhookSubscription)
+            .filter(WebhookSubscription.webhook_config_id == config.id)
+            .all()
+        )
         return {
-            "id": str(webhook.id),
-            "guild_id": str(webhook.guild_id),
-            "secret_slug": webhook.secret_slug,
-            "repository_full_name": webhook.repository_full_name,
-            "channel_id": str(webhook.channel_id),
-            "ai_summary_enabled": webhook.ai_summary_enabled,
-            "ai_max_diff_chars": webhook.ai_max_diff_chars,
-            "events": webhook.events,
+            "id": str(config.id),
+            "secret_slug": config.secret_slug,
+            "repository_full_name": config.repository_full_name,
+            "created_at": config.created_at.isoformat() if config.created_at else None,
+            "subscriptions": [
+                {
+                    "id": str(s.id),
+                    "guild_id": str(s.guild_id),
+                    "channel_id": str(s.channel_id),
+                    "ai_summary_enabled": s.ai_summary_enabled,
+                    "ai_max_diff_chars": s.ai_max_diff_chars,
+                    "events": s.events,
+                }
+                for s in subs
+            ],
         }
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
 
@@ -282,55 +321,32 @@ async def update_webhook(request: Request, webhook_id: str, payload: dict[str, o
     _require_full_session(request)
     settings: Settings = request.app.state.settings
 
-    repository_full_name = payload.get("repository_full_name")
-    channel_id = payload.get("channel_id")
-    ai_summary_enabled = payload.get("ai_summary_enabled")
-    ai_max_diff_chars = payload.get("ai_max_diff_chars")
-    raw_events = payload.get("events")
-
     for session in get_session(settings):
         webhook = session.get(WebhookConfig, int(webhook_id))
         if webhook is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
 
-        if repository_full_name is not None:
-            repo_value = str(repository_full_name).strip()
-            if not repo_value:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="repository_full_name cannot be empty",
-                )
-            webhook.repository_full_name = repo_value
-
-        if channel_id is not None:
-            channel_value = str(channel_id).strip()
-            if not channel_value:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="channel_id cannot be empty",
-                )
-            webhook.channel_id = channel_value
-
-        if ai_summary_enabled is not None:
-            webhook.ai_summary_enabled = bool(ai_summary_enabled)
-
-        if ai_max_diff_chars is not None:
-            webhook.ai_max_diff_chars = int(ai_max_diff_chars)
-
-        if raw_events is not None and isinstance(raw_events, list):
-            webhook.events = raw_events
-
-        session.commit()
-        session.refresh(webhook)
+        subs = (
+            session.query(WebhookSubscription)
+            .filter(WebhookSubscription.webhook_config_id == webhook.id)
+            .all()
+        )
         return {
             "id": str(webhook.id),
-            "guild_id": str(webhook.guild_id),
             "secret_slug": webhook.secret_slug,
             "repository_full_name": webhook.repository_full_name,
-            "channel_id": str(webhook.channel_id),
-            "ai_summary_enabled": webhook.ai_summary_enabled,
-            "ai_max_diff_chars": webhook.ai_max_diff_chars,
-            "events": webhook.events,
+            "created_at": webhook.created_at.isoformat() if webhook.created_at else None,
+            "subscriptions": [
+                {
+                    "id": str(s.id),
+                    "guild_id": str(s.guild_id),
+                    "channel_id": str(s.channel_id),
+                    "ai_summary_enabled": s.ai_summary_enabled,
+                    "ai_max_diff_chars": s.ai_max_diff_chars,
+                    "events": s.events,
+                }
+                for s in subs
+            ],
         }
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
 
@@ -345,10 +361,34 @@ async def send_test_webhook_message(request: Request, webhook_id: str, payload: 
     if not message_text:
         message_text = "Test message from the GitCord dashboard."
 
+    subscription_id = str(payload.get("subscription_id") or "").strip()
+
     for session in get_session(settings):
         webhook = session.get(WebhookConfig, int(webhook_id))
         if webhook is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+        channel_id: str | None = None
+        if subscription_id:
+            sub = session.get(WebhookSubscription, int(subscription_id))
+            if sub is None or sub.webhook_config_id != webhook.id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Subscription not found for this webhook",
+                )
+            channel_id = sub.channel_id
+        else:
+            sub = (
+                session.query(WebhookSubscription)
+                .filter(WebhookSubscription.webhook_config_id == webhook.id)
+                .first()
+            )
+            if sub is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No subscriptions configured; specify a subscription_id",
+                )
+            channel_id = sub.channel_id
 
         embed = discord.Embed(
             title="Webhook Test",
@@ -356,8 +396,8 @@ async def send_test_webhook_message(request: Request, webhook_id: str, payload: 
             color=discord.Color.blurple(),
         )
         embed.add_field(name="Repository", value=webhook.repository_full_name, inline=False)
-        embed.add_field(name="Channel ID", value=str(webhook.channel_id), inline=False)
-        await bot_client.send_embed_to_channel(webhook.channel_id, embed)
+        embed.add_field(name="Channel ID", value=str(channel_id), inline=False)
+        await bot_client.send_embed_to_channel(channel_id, embed)
         return {"status": "sent"}
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
 
@@ -374,24 +414,190 @@ async def delete_webhook(request: Request, webhook_id: str) -> None:
         webhook = session.get(WebhookConfig, int(webhook_id))
         if webhook is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
-        if github_token is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="GitHub OAuth required")
-        webhook_url_base = settings.oauth_redirect_base_url.rstrip("/")
-        webhook_url = f"{webhook_url_base}/webhooks/github/{webhook.guild_id}/{webhook.secret_slug}"
-        webhook_url_prefix = f"{webhook_url_base}/webhooks/github/{webhook.guild_id}/"
-        try:
-            await delete_github_webhook(
-                access_token=github_token.access_token,
-                repo_full_name=webhook.repository_full_name,
-                webhook_url=webhook_url,
-                url_prefix=webhook_url_prefix,
-            )
-        except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to remove GitHub webhook for {webhook.repository_full_name}: {exc}",
-            ) from exc
+        repo = webhook.repository_full_name
+        secret_slug = webhook.secret_slug
+        if github_token is not None:
+            webhook_url_base = settings.oauth_redirect_base_url.rstrip("/")
+            webhook_url = f"{webhook_url_base}/webhooks/github/{secret_slug}"
+            webhook_url_prefix = f"{webhook_url_base}/webhooks/github/"
+            try:
+                await delete_github_webhook(
+                    access_token=github_token.access_token,
+                    repo_full_name=repo,
+                    webhook_url=webhook_url,
+                    url_prefix=webhook_url_prefix,
+                )
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Failed to remove GitHub webhook for {repo}: {exc}",
+                ) from exc
         session.delete(webhook)
+        session.commit()
+        return None
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+@router.post("/webhooks/{webhook_id}/subscriptions", status_code=status.HTTP_201_CREATED)
+async def add_subscription(request: Request, webhook_id: str, payload: dict[str, object]) -> dict[str, object]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+    bot_client = request.app.state.bot_client
+
+    guild_id = str(payload.get("guild_id") or "").strip()
+    channel_id = str(payload.get("channel_id") or "").strip()
+    ai_summary_enabled = bool(payload.get("ai_summary_enabled", True))
+    ai_max_diff_chars = int(payload.get("ai_max_diff_chars") or 12000)
+    raw_events = payload.get("events")
+    events = raw_events if isinstance(raw_events, list) else ["push", "pull_request", "issues"]
+
+    if not guild_id or not channel_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="guild_id and channel_id are required",
+        )
+
+    for session in get_session(settings):
+        webhook = session.get(WebhookConfig, int(webhook_id))
+        if webhook is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+        existing = (
+            session.query(WebhookSubscription)
+            .filter(
+                WebhookSubscription.webhook_config_id == webhook.id,
+                WebhookSubscription.guild_id == guild_id,
+                WebhookSubscription.channel_id == channel_id,
+            )
+            .first()
+        )
+        if existing is not None:
+            existing.ai_summary_enabled = ai_summary_enabled
+            existing.ai_max_diff_chars = ai_max_diff_chars
+            existing.events = events
+            session.commit()
+            return _sub_dict(existing)
+
+        sub = WebhookSubscription(
+            webhook_config_id=webhook.id,
+            guild_id=guild_id,
+            channel_id=channel_id,
+            ai_summary_enabled=ai_summary_enabled,
+            ai_max_diff_chars=ai_max_diff_chars,
+            events=events,
+        )
+        session.add(sub)
+        session.commit()
+        session.refresh(sub)
+
+        try:
+            embed = discord.Embed(
+                title="Repository Connection Active",
+                description=f"**{webhook.repository_full_name}** is now connected to this channel.",
+                color=discord.Color.green(),
+            )
+            embed.add_field(name="Events", value=", ".join(events), inline=True)
+            embed.add_field(name="AI Summaries", value="Enabled" if ai_summary_enabled else "Disabled", inline=True)
+            await bot_client.send_embed_to_channel(channel_id, embed)
+        except Exception:
+            pass
+
+        return _sub_dict(sub)
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+def _sub_dict(sub: WebhookSubscription) -> dict[str, object]:
+    return {
+        "id": str(sub.id),
+        "guild_id": str(sub.guild_id),
+        "channel_id": str(sub.channel_id),
+        "ai_summary_enabled": sub.ai_summary_enabled,
+        "ai_max_diff_chars": sub.ai_max_diff_chars,
+        "events": sub.events,
+    }
+
+
+@router.put("/webhooks/{webhook_id}/subscriptions/{subscription_id}")
+async def update_subscription(request: Request, webhook_id: str, subscription_id: str, payload: dict[str, object]) -> dict[str, object]:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+    bot_client = request.app.state.bot_client
+
+    for session in get_session(settings):
+        sub = session.get(WebhookSubscription, int(subscription_id))
+        if sub is None or str(sub.webhook_config_id) != webhook_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+
+        config = session.get(WebhookConfig, sub.webhook_config_id)
+
+        if "ai_summary_enabled" in payload:
+            sub.ai_summary_enabled = bool(payload["ai_summary_enabled"])
+        if "ai_max_diff_chars" in payload:
+            sub.ai_max_diff_chars = int(payload["ai_max_diff_chars"])
+        raw_events = payload.get("events")
+        if raw_events is not None and isinstance(raw_events, list):
+            sub.events = raw_events
+
+        session.commit()
+        session.refresh(sub)
+
+        try:
+            embed = discord.Embed(
+                title="Subscription Updated",
+                description=f"Settings for **{config.repository_full_name}** have been updated.",
+                color=discord.Color.blurple(),
+            )
+            embed.add_field(name="Events", value=", ".join(sub.events), inline=True)
+            embed.add_field(name="AI Summaries", value="Enabled" if sub.ai_summary_enabled else "Disabled", inline=True)
+            await bot_client.send_embed_to_channel(sub.channel_id, embed)
+        except Exception:
+            pass
+
+        return _sub_dict(sub)
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+
+@router.delete("/webhooks/{webhook_id}/subscriptions/{subscription_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_subscription(request: Request, webhook_id: str, subscription_id: str) -> None:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+    bot_client = request.app.state.bot_client
+    for session in get_session(settings):
+        sub = session.get(WebhookSubscription, int(subscription_id))
+        if sub is None or str(sub.webhook_config_id) != webhook_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+
+        config = session.get(WebhookConfig, sub.webhook_config_id)
+        channel_id = sub.channel_id
+        repo_name = config.repository_full_name if config else "Unknown"
+
+        session.delete(sub)
+        session.commit()
+
+        try:
+            embed = discord.Embed(
+                title="Repository Connection Removed",
+                description=f"**{repo_name}** is no longer connected to this channel.",
+                color=discord.Color.red(),
+            )
+            await bot_client.send_embed_to_channel(channel_id, embed)
+        except Exception:
+            pass
+
+        return None
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
+
+
+@router.delete("/webhooks/{webhook_id}/subscriptions/{subscription_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_subscription(request: Request, webhook_id: str, subscription_id: str) -> None:
+    _require_full_session(request)
+    settings: Settings = request.app.state.settings
+    for session in get_session(settings):
+        sub = session.get(WebhookSubscription, int(subscription_id))
+        if sub is None or str(sub.webhook_config_id) != webhook_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+        session.delete(sub)
         session.commit()
         return None
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
@@ -461,79 +667,83 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
     if not isinstance(repositories, list) or not repositories:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="repositories required")
 
-    repo_list = sorted({str(repo).strip() for repo in repositories if str(repo).strip()})
-    if not repo_list:
+    repo_set = sorted({str(repo).strip() for repo in repositories if str(repo).strip()})
+    if not repo_set:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="repositories required")
 
     webhook_url_base = settings.oauth_redirect_base_url.rstrip("/")
-    webhook_url_prefix = f"{webhook_url_base}/webhooks/github/{guild_id}/"
-
     results: list[dict[str, object]] = []
-    for session in get_session(settings):
-        existing = (
-            session.query(WebhookConfig)
-            .filter(WebhookConfig.guild_id == guild_id)
-            .all()
-        )
-        existing_by_repo = {wh.repository_full_name: wh for wh in existing}
 
-        for webhook in existing:
-            if webhook.repository_full_name not in repo_list:
-                webhook_url = f"{webhook_url_base}/webhooks/github/{guild_id}/{webhook.secret_slug}"
+    for session in get_session(settings):
+        configs = session.query(WebhookConfig).all()
+        config_by_repo = {c.repository_full_name: c for c in configs}
+
+        repos_to_provision: list[str] = []
+
+        for repo in repo_set:
+            if repo in config_by_repo:
+                config = config_by_repo[repo]
+            else:
+                secret_slug = _make_unique_slug(session, f"{_slugify(repo)}-{secrets.token_hex(3)}")
+                webhook_secret = secrets.token_urlsafe(32)
+                config = WebhookConfig(
+                    secret_slug=secret_slug,
+                    webhook_secret=webhook_secret,
+                    repository_full_name=repo,
+                )
+                session.add(config)
+                session.flush()
+                config_by_repo[repo] = config
+                if github_token:
+                    repos_to_provision.append(repo)
+
+            existing_sub = (
+                session.query(WebhookSubscription)
+                .filter(
+                    WebhookSubscription.webhook_config_id == config.id,
+                    WebhookSubscription.guild_id == guild_id,
+                    WebhookSubscription.channel_id == channel_id,
+                )
+                .first()
+            )
+            if existing_sub is None:
+                sub = WebhookSubscription(
+                    webhook_config_id=config.id,
+                    guild_id=guild_id,
+                    channel_id=channel_id,
+                )
+                session.add(sub)
+                session.flush()
+
+        for repo in repo_set:
+            config = config_by_repo[repo]
+            if repo in repos_to_provision:
+                webhook_url = f"{webhook_url_base}/webhooks/github/{config.secret_slug}"
+                webhook_url_prefix = f"{webhook_url_base}/webhooks/github/"
                 try:
-                    await delete_github_webhook(
+                    github_result = await ensure_github_webhook(
                         access_token=github_token.access_token,
-                        repo_full_name=webhook.repository_full_name,
+                        repo_full_name=repo,
                         webhook_url=webhook_url,
+                        webhook_secret=config.webhook_secret,
+                        events=["push", "pull_request", "issues"],
                         url_prefix=webhook_url_prefix,
                     )
                 except Exception as exc:
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"Failed to remove GitHub webhook for {webhook.repository_full_name}: {exc}",
+                        detail=f"Failed to sync GitHub webhook for {repo}: {exc}",
                     ) from exc
-                session.delete(webhook)
-
-        for repo_full_name in repo_list:
-            webhook = existing_by_repo.get(repo_full_name)
-            if webhook is None:
-                secret_slug = f"{_slugify(repo_full_name)}-{secrets.token_urlsafe(6)}"
-                webhook_secret = secrets.token_urlsafe(32)
-                webhook = WebhookConfig(
-                    guild_id=guild_id,
-                    secret_slug=secret_slug,
-                    webhook_secret=webhook_secret,
-                    repository_full_name=repo_full_name,
-                    channel_id=channel_id,
-                    ai_summary_enabled=True,
-                )
-                session.add(webhook)
             else:
-                webhook.channel_id = channel_id
-            webhook_url = f"{webhook_url_base}/webhooks/github/{guild_id}/{webhook.secret_slug}"
-            try:
-                github_result = await ensure_github_webhook(
-                    access_token=github_token.access_token,
-                    repo_full_name=repo_full_name,
-                    webhook_url=webhook_url,
-                    webhook_secret=webhook.webhook_secret,
-                    events=webhook.events or ["push", "pull_request", "issues"],
-                    url_prefix=webhook_url_prefix,
-                )
-            except Exception as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Failed to sync GitHub webhook for {repo_full_name}: {exc}",
-                ) from exc
-            results.append(
-                {
-                    "repository_full_name": repo_full_name,
-                    "channel_id": str(channel_id),
-                    "secret_slug": webhook.secret_slug,
-                    "webhook_url": webhook_url,
-                    "github_hook": github_result,
-                }
-            )
+                github_result = {"action": "existing"}
+
+            results.append({
+                "repository_full_name": repo,
+                "channel_id": str(channel_id),
+                "secret_slug": config.secret_slug,
+                "webhook_url": f"{webhook_url_base}/webhooks/github/{config.secret_slug}",
+                "github_hook": github_result,
+            })
 
         session.commit()
         break

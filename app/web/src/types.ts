@@ -2,7 +2,7 @@ export type Overview = {
   guilds: number;
   repositories: number;
   channels: number;
-  webhook_configs: number;
+  connections: number;
   summary_configs: number;
   leaderboard_entries: number;
 };
@@ -24,14 +24,19 @@ export type Repository = {
 
 export type WebhookConfig = {
   id: string;
-  guild_id: string;
   secret_slug: string;
   repository_full_name: string;
+  created_at?: string | null;
+  subscriptions: WebhookSubscription[];
+};
+
+export type WebhookSubscription = {
+  id: string;
+  guild_id: string;
   channel_id: string;
   ai_summary_enabled: boolean;
   ai_max_diff_chars: number;
   events: string[];
-  created_at?: string | null;
 };
 
 export type Profile = {

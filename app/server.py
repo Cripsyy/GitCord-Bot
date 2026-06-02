@@ -64,6 +64,17 @@ def create_app(settings: Settings, bot_client: DiscordAssistantClient) -> FastAP
                 return FileResponse(file_path)
             return FileResponse(web_root / "index.html")
 
+        @app.get("/configurations/connections", include_in_schema=False)
+        async def configurations_connections_index() -> FileResponse:
+            return FileResponse(web_root / "index.html")
+
+        @app.get("/configurations/connections/{full_path:path}", include_in_schema=False)
+        async def configurations_connections_assets(full_path: str) -> FileResponse:
+            file_path = web_root / full_path
+            if file_path.exists() and file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(web_root / "index.html")
+
         @app.get("/configurations/summaries", include_in_schema=False)
         async def configurations_summaries_index() -> FileResponse:
             return FileResponse(web_root / "index.html")

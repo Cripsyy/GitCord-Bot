@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { Channel, Guild, Overview, Repository, WebhookConfig, SummaryConfig, SessionInfo } from "../types";
 import Navbar from "../components/Navbar";
 import DashboardSection from "../components/DashboardSection";
@@ -100,7 +101,7 @@ function Dashboard() {
             { label: "Guilds", value: data.overview?.guilds ?? 0 },
             { label: "Repositories", value: data.overview?.repositories ?? 0 },
             { label: "Channels", value: data.overview?.channels ?? 0 },
-            { label: "Webhooks", value: data.overview?.webhook_configs ?? 0 },
+            { label: "Connections", value: data.overview?.connections ?? 0 },
             { label: "Summaries", value: data.overview?.summary_configs ?? data.summaryConfigs.length },
             { label: "Leaderboard", value: data.overview?.leaderboard_entries ?? 0 },
           ].map((card) => (
@@ -158,24 +159,19 @@ function Dashboard() {
 
         <section className="grid gap-5 xl:grid-cols-2">
           <DashboardSection
-            title="Webhook Configs"
+            title="Repository Connections"
             action={
-              <a
-                href="/configurations"
+              <Link
+                to="/configurations/connections"
                 className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white"
               >
-                Manage Configurations
-              </a>
+                Manage Connections
+              </Link>
             }
           >
             {data.webhooks.length ? (
               data.webhooks.map((webhook) => {
-                const guildName = data.guilds.find(
-                  (g) => String(g.id) === webhook.guild_id
-                )?.name;
-                const channelName = data.channels.find(
-                  (c) => String(c.channel_id) === webhook.channel_id
-                )?.name;
+                const subs = webhook.subscriptions ?? [];
                 return (
                   <div
                     key={webhook.id}
@@ -184,21 +180,35 @@ function Dashboard() {
                     <p className="text-sm font-semibold truncate text-discord-200">
                       {webhook.repository_full_name}
                     </p>
-                    <p className="text-xs text-discord-400">
-                      {guildName ?? `Guild ${webhook.guild_id}`} → {channelName ?? `Channel ${webhook.channel_id}`}
-                    </p>
+                    {subs.length > 0 ? (
+                      subs.map((sub) => {
+                        const guildName = data.guilds.find(
+                          (g) => String(g.id) === sub.guild_id
+                        )?.name;
+                        const channelName = data.channels.find(
+                          (c) => String(c.channel_id) === sub.channel_id
+                        )?.name;
+                        return (
+                          <p key={sub.id} className="text-xs text-discord-400">
+                            {guildName ?? `Guild ${sub.guild_id}`} → {channelName ?? `Channel ${sub.channel_id}`}
+                          </p>
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-discord-500">No subscriptions</p>
+                    )}
                     <p className="text-xs text-discord-500">
-                      Slug: {webhook.secret_slug} | Events: {webhook.events?.join(", ") ?? "push, pull_request, issues"}
+                      Slug: {webhook.secret_slug}
                     </p>
                   </div>
                 );
               })
             ) : (
               <p className="text-sm text-discord-500">
-                No webhook configs yet.{" "}
-                <a href="/configurations" className="text-discord-blurple underline">
+                No connections yet.{" "}
+                <Link to="/configurations/connections" className="text-discord-blurple underline">
                   Create one
-                </a>
+                </Link>
               </p>
             )}
           </DashboardSection>
@@ -206,12 +216,12 @@ function Dashboard() {
           <DashboardSection
             title="Summaries"
             action={
-              <a
-                href="/configurations/summaries"
+              <Link
+                to="/configurations/summaries"
                 className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white"
               >
                 Manage Summaries
-              </a>
+              </Link>
             }
           >
             {data.summaryConfigs.length ? (
@@ -247,9 +257,9 @@ function Dashboard() {
             ) : (
               <p className="text-sm text-discord-500">
                 No summary schedules yet.{" "}
-                <a href="/configurations/summaries" className="text-discord-blurple underline">
+                <Link to="/configurations/summaries" className="text-discord-blurple underline">
                   Create one
-                </a>
+                </Link>
               </p>
             )}
           </DashboardSection>

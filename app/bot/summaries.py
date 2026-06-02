@@ -90,11 +90,13 @@ def fetch_yesterday_standups(settings: Settings, guild_id: str) -> list[dict]:
 
 def get_repos_for_guild(settings: Settings, guild_id: str) -> list[str]:
     from app.models.webhook_config import WebhookConfig
+    from app.models.webhook_subscription import WebhookSubscription
 
     for session in get_session(settings):
         configs = (
             session.query(WebhookConfig)
-            .filter(WebhookConfig.guild_id == guild_id)
+            .join(WebhookSubscription, WebhookSubscription.webhook_config_id == WebhookConfig.id)
+            .filter(WebhookSubscription.guild_id == guild_id)
             .all()
         )
         return list({c.repository_full_name for c in configs if c.repository_full_name})
