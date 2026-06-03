@@ -8,6 +8,7 @@ import SearchDropdown from "../components/SearchDropdown";
 import { getLevelProgress } from "../lib/xp";
 import { fetchJson } from "../lib/api";
 import GitHubAvatar from "../components/GitHubAvatar";
+import { SkeletonCard, SkeletonLine, SkeletonCircle } from "../components/Skeleton";
 
 function Leaderboard() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -114,7 +115,46 @@ function Leaderboard() {
         ) : null}
 
         {loading ? (
-          <p className="text-sm text-discord-500">Loading...</p>
+          <>
+            <div className="grid gap-3 sm:gap-5 items-end grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex flex-col items-center min-w-0">
+                  <SkeletonCircle size="h-16 w-16" />
+                  <SkeletonLine className="mt-2 h-3 w-20" />
+                  <SkeletonLine className="mt-1 mb-2 h-2.5 w-16" />
+                  <div
+                    className={`w-full rounded-xl border border-white/5 bg-discord-850 flex flex-col items-center justify-start text-center px-4 pt-5 pb-4 ${
+                      i === 2 ? "h-[180px]" : "h-[140px]"
+                    }`}
+                  >
+                    <SkeletonLine className="h-8 w-8" />
+                    <SkeletonLine className="mt-1 h-2.5 w-10" />
+                    <SkeletonLine className="mt-3 h-5 w-16" />
+                    <div className="mt-auto w-full">
+                      <SkeletonLine className="h-1.5 w-full" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <SkeletonCard key={i}>
+                  <div className="flex items-center gap-4">
+                    <SkeletonCircle size="h-10 w-10" />
+                    <div className="min-w-0 flex-1">
+                      <SkeletonLine className="h-4 w-40" />
+                      <SkeletonLine className="mt-1 h-3 w-24" />
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <SkeletonLine className="h-5 w-16" />
+                      <SkeletonLine className="h-3 w-20" />
+                    </div>
+                  </div>
+                </SkeletonCard>
+              ))}
+            </div>
+          </>
         ) : (
           <>
             {showPodium && <Podium entries={podiumEntries} guilds={guilds} />}

@@ -130,6 +130,7 @@ async def dashboard_overview(request: Request) -> dict[str, int]:
         channels = session.query(ChannelConfig).count()
         connections = session.query(WebhookConfig).count()
         subscriptions = session.query(WebhookSubscription).count()
+        summary_configs = session.query(SummaryConfig).count()
         leaderboard_entries = session.query(LeaderboardEntry).count()
         break
     return {
@@ -138,7 +139,7 @@ async def dashboard_overview(request: Request) -> dict[str, int]:
         "channels": channels,
         "connections": connections,
         "subscriptions": subscriptions,
-        "summary_configs": 0,
+        "summary_configs": summary_configs,
         "leaderboard_entries": leaderboard_entries,
     }
 
@@ -557,7 +558,6 @@ async def update_subscription(request: Request, webhook_id: str, subscription_id
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
 
 
-
 @router.delete("/webhooks/{webhook_id}/subscriptions/{subscription_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_subscription(request: Request, webhook_id: str, subscription_id: str) -> None:
     _require_full_session(request)
@@ -585,20 +585,6 @@ async def remove_subscription(request: Request, webhook_id: str, subscription_id
         except Exception:
             pass
 
-        return None
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
-
-
-@router.delete("/webhooks/{webhook_id}/subscriptions/{subscription_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_subscription(request: Request, webhook_id: str, subscription_id: str) -> None:
-    _require_full_session(request)
-    settings: Settings = request.app.state.settings
-    for session in get_session(settings):
-        sub = session.get(WebhookSubscription, int(subscription_id))
-        if sub is None or str(sub.webhook_config_id) != webhook_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
-        session.delete(sub)
-        session.commit()
         return None
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
 

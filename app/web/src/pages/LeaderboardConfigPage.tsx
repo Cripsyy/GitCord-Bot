@@ -6,6 +6,8 @@ import type { SortDef } from "../components/ConfigView";
 import Toggle from "../components/Toggle";
 import CheckButton from "../components/CheckButton";
 import NumberStepper from "../components/NumberStepper";
+import Modal from "../components/Modal";
+import { SkeletonCard, SkeletonLine } from "../components/Skeleton";
 import { fetchJson } from "../lib/api";
 
 const XP_EVENTS = [
@@ -315,7 +317,16 @@ function LeaderboardConfigPage() {
         ) : null}
 
         {loading ? (
-          <p className="text-sm text-discord-500">Loading...</p>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <SkeletonCard key={i}>
+                <SkeletonLine className="h-4 w-1/3" />
+                <SkeletonLine className="mt-2 h-3 w-2/3" />
+                <SkeletonLine className="mt-4 h-3 w-full" />
+                <SkeletonLine className="mt-2 h-3 w-1/2" />
+              </SkeletonCard>
+            ))}
+          </div>
         ) : (
           <ConfigView
             items={data.guilds}
@@ -327,139 +338,135 @@ function LeaderboardConfigPage() {
         )}
       </main>
 
-      {showModal && editingGuild ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/5 bg-discord-850 p-6 shadow-soft">
-            <h2 className="font-display text-lg text-discord-200">
-              {editingGuild.name ?? `Guild ${editingGuild.id}`}
-            </h2>
+      <Modal isOpen={showModal && editingGuild !== null} onClose={closeModal} maxWidth="max-w-2xl">
+        <h2 className="font-display text-lg text-discord-200">
+          {editingGuild?.name ?? `Guild ${editingGuild?.id}`}
+        </h2>
 
-            {formError ? (
-              <p className="mt-3 rounded-lg bg-red-900/30 px-3 py-2 text-xs text-red-400">{formError}</p>
-            ) : null}
+        {formError ? (
+          <p className="mt-3 rounded-lg bg-red-900/30 px-3 py-2 text-xs text-red-400">{formError}</p>
+        ) : null}
 
-            <div className="mt-4 space-y-4">
-              <div>
-                <h3 className="font-display text-base text-discord-200">XP Settings</h3>
-                <p className="mt-1 text-xs text-discord-500">
-                  Enable or disable XP awards per event type. Disabled events will not award XP.
-                </p>
-                <div className="mt-4 space-y-2 max-h-[200px] overflow-y-auto">
-                  {XP_EVENTS.map(({ key, label }) => (
-                    <div key={key} className="flex items-center gap-3 rounded-xl border border-white/5 bg-discord-900 px-4 py-2.5">
-                      <CheckButton
-                        checked={modalEnabledEvents.has(key)}
-                        onChange={() => toggleModalEvent(key)}
-                        className="w-[140px] text-left"
-                      >
-                        {label}
-                      </CheckButton>
-                      <NumberStepper
-                        value={modalXpSettings[key] ?? 0}
-                        onChange={(v) => setModalXpSettings((prev) => ({ ...prev, [key]: v }))}
-                        step={5}
-                        disabled={!modalEnabledEvents.has(key)}
-                      />
-                      <span className="text-xs text-discord-500">XP</span>
-                    </div>
-                  ))}
+        <div className="mt-4 space-y-4">
+          <div>
+            <h3 className="font-display text-base text-discord-200">XP Settings</h3>
+            <p className="mt-1 text-xs text-discord-500">
+              Enable or disable XP awards per event type. Disabled events will not award XP.
+            </p>
+            <div className="mt-4 space-y-2 max-h-[200px] overflow-y-auto">
+              {XP_EVENTS.map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-3 rounded-xl border border-white/5 bg-discord-900 px-4 py-2.5">
+                  <CheckButton
+                    checked={modalEnabledEvents.has(key)}
+                    onChange={() => toggleModalEvent(key)}
+                    className="w-[140px] text-left"
+                  >
+                    {label}
+                  </CheckButton>
+                  <NumberStepper
+                    value={modalXpSettings[key] ?? 0}
+                    onChange={(v) => setModalXpSettings((prev) => ({ ...prev, [key]: v }))}
+                    step={5}
+                    disabled={!modalEnabledEvents.has(key)}
+                  />
+                  <span className="text-xs text-discord-500">XP</span>
                 </div>
-              </div>
+              ))}
+            </div>
+          </div>
 
-              <div>
-                <div className="flex items-center justify-between">
-                  <h3 className="font-display text-base text-discord-200">Role Milestones</h3>
-                  <div className="flex items-center gap-3">
-                    <CheckButton
-                      checked={modalHoist}
-                      onChange={() => setModalHoist((prev) => !prev)}
-                      size="md"
-                    >
-                      Hoist
-                    </CheckButton>
-                    <CheckButton
-                      checked={modalRemovePrevious}
-                      onChange={() => setModalRemovePrevious((prev) => !prev)}
-                      size="md"
-                    >
-                      Remove previous
-                    </CheckButton>
-                    <button
-                      type="button"
-                      onClick={addModalMilestone}
-                      className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-discord-400 hover:text-discord-200"
-                    >
-                      + Add Milestone
-                    </button>
-                  </div>
-                </div>
-                <p className="mt-1 text-xs text-discord-500">
-                  Roles assigned when a user reaches a level.
-                </p>
-                <div className="mt-4 max-h-[200px] space-y-2 overflow-y-auto">
-                  {modalMilestones.map((m, i) => (
-                    <div key={i} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/5 bg-discord-900 px-4 py-3">
-                      <label className="text-xs text-discord-500">
-                        Level
-                        <NumberStepper
-                          value={m.level}
-                          onChange={(v) => updateModalMilestone(i, "level", v)}
-                          step={1}
-                          min={1}
-                          className="ml-2"
-                        />
-                      </label>
-                      <label className="text-xs text-discord-500">
-                        Role Name
-                        <input
-                          type="text"
-                          value={m.role_name}
-                          onChange={(e) => updateModalMilestone(i, "role_name", e.target.value)}
-                          className="ml-2 w-40 rounded-lg border border-white/10 bg-discord-850 px-2 py-1.5 text-sm text-discord-200 outline-none focus:border-discord-blurple"
-                        />
-                      </label>
-                      <label className="inline-flex items-center text-xs text-discord-500">
-                        Color
-                        <input
-                          type="color"
-                          value={m.color}
-                          onChange={(e) => updateModalMilestone(i, "color", e.target.value)}
-                          className="ml-2 h-6 w-8 cursor-pointer rounded border border-white/10 bg-transparent p-0.5"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => removeModalMilestone(i)}
-                        className="text-xs text-discord-500 hover:text-red-400"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-base text-discord-200">Role Milestones</h3>
+              <div className="flex items-center gap-3">
+                <CheckButton
+                  checked={modalHoist}
+                  onChange={() => setModalHoist((prev) => !prev)}
+                  size="md"
+                >
+                  Hoist
+                </CheckButton>
+                <CheckButton
+                  checked={modalRemovePrevious}
+                  onChange={() => setModalRemovePrevious((prev) => !prev)}
+                  size="md"
+                >
+                  Remove previous
+                </CheckButton>
+                <button
+                  type="button"
+                  onClick={addModalMilestone}
+                  className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-discord-400 hover:text-discord-200"
+                >
+                  + Add Milestone
+                </button>
               </div>
             </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-lg border border-white/10 px-4 py-2 text-xs text-discord-400 hover:text-discord-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Save Changes"}
-              </button>
+            <p className="mt-1 text-xs text-discord-500">
+              Roles assigned when a user reaches a level.
+            </p>
+            <div className="mt-4 max-h-[13rem] space-y-2 overflow-y-auto">
+              {modalMilestones.map((m, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/5 bg-discord-900 px-4 py-3">
+                  <label className="text-xs text-discord-500">
+                    Level
+                    <NumberStepper
+                      value={m.level}
+                      onChange={(v) => updateModalMilestone(i, "level", v)}
+                      step={1}
+                      min={1}
+                      className="ml-2"
+                    />
+                  </label>
+                  <label className="text-xs text-discord-500">
+                    Role Name
+                    <input
+                      type="text"
+                      value={m.role_name}
+                      onChange={(e) => updateModalMilestone(i, "role_name", e.target.value)}
+                      className="ml-2 w-40 rounded-lg border border-white/10 bg-discord-850 px-2 py-1.5 text-sm text-discord-200 outline-none focus:border-discord-blurple"
+                    />
+                  </label>
+                  <label className="inline-flex items-center text-xs text-discord-500">
+                    Color
+                    <input
+                      type="color"
+                      value={m.color}
+                      onChange={(e) => updateModalMilestone(i, "color", e.target.value)}
+                      className="ml-2 h-6 w-8 cursor-pointer rounded border border-white/10 bg-transparent p-0.5"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => removeModalMilestone(i)}
+                    className="text-xs text-discord-500 hover:text-red-400"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         </div>
-      ) : null}
+
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={closeModal}
+            className="rounded-lg border border-white/10 px-4 py-2 text-xs text-discord-400 hover:text-discord-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

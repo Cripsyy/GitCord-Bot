@@ -17,3 +17,21 @@
     -moz-appearance: textfield;
   }
 }
+
+@layer components {
+  .sub-list-scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: calc(3 * 46px + 2 * 0.5rem);
+    max-height: calc(3 * 46px + 2 * 0.5rem);
+  }
+
+  .sub-row {
+    min-height: 46px;
+  }
+
+  .empty-state {
+    flex: 1 1 auto;
+    min-height: calc(3 * 38px + 2 * 0.5rem + 28px);
+  }
+}

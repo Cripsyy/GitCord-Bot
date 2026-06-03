@@ -6,6 +6,8 @@ import ConfigView from "../components/ConfigView";
 import type { SortDef } from "../components/ConfigView";
 import Toggle from "../components/Toggle";
 import CheckButton from "../components/CheckButton";
+import Modal from "../components/Modal";
+import { SkeletonCard, SkeletonLine } from "../components/Skeleton";
 import { fetchJson } from "../lib/api";
 
 type PageData = {
@@ -261,7 +263,16 @@ function AutomatedSummaries() {
 
       <main className="flex-1 overflow-y-auto space-y-4 px-6 py-6">
         {loading ? (
-          <p className="text-sm text-discord-500">Loading...</p>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <SkeletonCard key={i}>
+                <SkeletonLine className="h-4 w-1/3" />
+                <SkeletonLine className="mt-2 h-3 w-2/3" />
+                <SkeletonLine className="mt-4 h-3 w-full" />
+                <SkeletonLine className="mt-2 h-3 w-1/2" />
+              </SkeletonCard>
+            ))}
+          </div>
         ) : (
           <>
             {statusMessage ? (
@@ -288,105 +299,101 @@ function AutomatedSummaries() {
         )}
       </main>
 
-      {showModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-white/5 bg-discord-850 p-6 shadow-soft">
-            <h2 className="font-display text-lg text-discord-200">
-              {editingConfig ? "Edit Summary Schedule" : "New Summary Schedule"}
-            </h2>
+      <Modal isOpen={showModal} onClose={closeModal} maxWidth="max-w-lg">
+        <h2 className="font-display text-lg text-discord-200">
+          {editingConfig ? "Edit Summary Schedule" : "New Summary Schedule"}
+        </h2>
 
-            {formError ? (
-              <p className="mt-3 rounded-lg bg-red-900/30 px-3 py-2 text-xs text-red-400">{formError}</p>
-            ) : null}
+        {formError ? (
+          <p className="mt-3 rounded-lg bg-red-900/30 px-3 py-2 text-xs text-red-400">{formError}</p>
+        ) : null}
 
-            <div className="mt-4 space-y-4">
-              {editingConfig ? (
-                <p className="text-xs text-discord-500">
-                  Server: {data.guilds.find((g) => String(g.id) === editingConfig.guild_id)?.name ?? editingConfig.guild_id}
-                </p>
-              ) : (
-                <SearchDropdown
-                  label="Server"
-                  items={guildOptions}
-                  selected={form.guild_id}
-                  onSelect={(value) => {
-                    updateForm("guild_id", value);
-                    if (value && form.channel_id) {
-                      const channelStillValid = data.channels.some(
-                        (ch) => String(ch.channel_id) === form.channel_id && String(ch.guild_id) === value
-                      );
-                      if (!channelStillValid) updateForm("channel_id", "");
-                    }
-                  }}
-                  placeholder="Select a server"
-                />
-              )}
+        <div className="mt-4 space-y-4">
+          {editingConfig ? (
+            <p className="text-xs text-discord-500">
+              Server: {data.guilds.find((g) => String(g.id) === editingConfig.guild_id)?.name ?? editingConfig.guild_id}
+            </p>
+          ) : (
+            <SearchDropdown
+              label="Server"
+              items={guildOptions}
+              selected={form.guild_id}
+              onSelect={(value) => {
+                updateForm("guild_id", value);
+                if (value && form.channel_id) {
+                  const channelStillValid = data.channels.some(
+                    (ch) => String(ch.channel_id) === form.channel_id && String(ch.guild_id) === value
+                  );
+                  if (!channelStillValid) updateForm("channel_id", "");
+                }
+              }}
+              placeholder="Select a server"
+            />
+          )}
 
-              <SearchDropdown
-                label="Channel"
-                items={channelOptions}
-                selected={form.channel_id}
-                onSelect={(value) => updateForm("channel_id", value)}
-                placeholder="Select a channel"
-              />
+          <SearchDropdown
+            label="Channel"
+            items={channelOptions}
+            selected={form.channel_id}
+            onSelect={(value) => updateForm("channel_id", value)}
+            placeholder="Select a channel"
+          />
 
-              <label className="text-xs text-discord-500">
-                Send Time (UTC)
-                <input
-                  type="time"
-                  value={form.send_time}
-                  onChange={(e) => updateForm("send_time", e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-discord-900 px-3 py-2 text-sm text-discord-200 outline-none focus:border-discord-blurple"
-                />
-              </label>
+          <label className="text-xs text-discord-500">
+            Send Time (UTC)
+            <input
+              type="time"
+              value={form.send_time}
+              onChange={(e) => updateForm("send_time", e.target.value)}
+              className="mt-1 w-full rounded-lg border border-white/10 bg-discord-900 px-3 py-2 text-sm text-discord-200 outline-none focus:border-discord-blurple"
+            />
+          </label>
 
-              <div>
-                <p className="mb-1.5 text-xs text-discord-500">Include in Briefing</p>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { key: "include_prs", label: "Open PRs Needing Review" },
-                    { key: "include_issues", label: "Unassigned Issues" },
-                    { key: "include_standups", label: "Yesterday's Standups" },
-                  ].map((item) => (
-                    <CheckButton
-                      key={item.key}
-                      checked={form[item.key as keyof FormState] as boolean}
-                      onChange={() => updateForm(item.key as keyof FormState, !form[item.key as keyof FormState])}
-                    >
-                      {item.label}
-                    </CheckButton>
-                  ))}
-                </div>
-              </div>
-
-              <Toggle
-                checked={form.enabled}
-                onChange={(checked) => updateForm("enabled", checked)}
-              >
-                Enabled
-              </Toggle>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-lg border border-white/10 px-4 py-2 text-xs text-discord-400 hover:text-discord-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || !form.guild_id || !form.channel_id || !form.send_time}
-                className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
-              >
-                {saving ? "Saving..." : editingConfig ? "Save Changes" : "Create"}
-              </button>
+          <div>
+            <p className="mb-1.5 text-xs text-discord-500">Include in Briefing</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "include_prs", label: "Open PRs Needing Review" },
+                { key: "include_issues", label: "Unassigned Issues" },
+                { key: "include_standups", label: "Yesterday's Standups" },
+              ].map((item) => (
+                <CheckButton
+                  key={item.key}
+                  checked={form[item.key as keyof FormState] as boolean}
+                  onChange={() => updateForm(item.key as keyof FormState, !form[item.key as keyof FormState])}
+                >
+                  {item.label}
+                </CheckButton>
+              ))}
             </div>
           </div>
+
+          <Toggle
+            checked={form.enabled}
+            onChange={(checked) => updateForm("enabled", checked)}
+          >
+            Enabled
+          </Toggle>
         </div>
-      ) : null}
+
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={closeModal}
+            className="rounded-lg border border-white/10 px-4 py-2 text-xs text-discord-400 hover:text-discord-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !form.guild_id || !form.channel_id || !form.send_time}
+            className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {saving ? "Saving..." : editingConfig ? "Save Changes" : "Create"}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
