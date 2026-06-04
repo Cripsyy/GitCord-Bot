@@ -7,8 +7,10 @@ import Toggle from "../components/Toggle";
 import CheckButton from "../components/CheckButton";
 import NumberStepper from "../components/NumberStepper";
 import Modal from "../components/Modal";
+import FormError from "../components/FormError";
 import { SkeletonCard, SkeletonLine } from "../components/Skeleton";
-import { fetchJson } from "../lib/api";
+import { showError } from "../lib/toast";
+import { api } from "../lib/api";
 
 const XP_EVENTS = [
   { key: "push", label: "Push" },
@@ -40,7 +42,6 @@ type PageData = {
 function LeaderboardConfigPage() {
   const [data, setData] = useState<PageData>({ guilds: [], configs: {} });
   const [loading, setLoading] = useState(true);
-  const [statusMessage, setStatusMessage] = useState("");
 
   const [showModal, setShowModal] = useState(false);
   const [editingGuild, setEditingGuild] = useState<Guild | null>(null);
@@ -55,11 +56,11 @@ function LeaderboardConfigPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const guilds = await fetchJson<Guild[]>("/api/dashboard/guilds");
+      const guilds = await api.get<Guild[]>("/api/dashboard/guilds");
 
       const configResults = await Promise.allSettled(
         guilds.map((g) =>
-          fetchJson<LeaderboardConfig | null>(`/api/dashboard/leaderboard/config?guild_id=${g.id}`)
+          api.get<LeaderboardConfig | null>(`/api/dashboard/leaderboard/config?guild_id=${g.id}`, { showError: false })
         )
       );
 
@@ -72,7 +73,7 @@ function LeaderboardConfigPage() {
 
       setData({ guilds, configs });
     } catch (error) {
-      setStatusMessage(`Error: ${(error as Error).message}`);
+      showError((error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -109,12 +110,25 @@ function LeaderboardConfigPage() {
     const milestones = existing?.role_milestones ?? defaultMilestones;
     const newEnabled = !currentEnabled;
 
-    setStatusMessage("Saving...");
-    try {
-      const response = await fetch("/api/dashboard/leaderboard/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+    await api.post("/api/dashboard/leaderboard/config", {
+      guild_id: guildId,
+      enabled: newEnabled,
+      base_xp: existing?.base_xp ?? 100,
+      start_increment: existing?.start_increment ?? 20,
+      increment_step: existing?.increment_step ?? 10,
+      xp_settings: xpSettings,
+      role_milestones: milestones,
+    }, {
+      showSuccess: true,
+      successMessage: newEnabled ? "Leaderboard enabled" : "Leaderboard disabled",
+    });
+
+    setData((prev) => ({
+      ...prev,
+      configs: {
+        ...prev.configs,
+        [guildId]: {
+          id: existing?.id ?? "",
           guild_id: guildId,
           enabled: newEnabled,
           base_xp: existing?.base_xp ?? 100,
@@ -122,32 +136,9 @@ function LeaderboardConfigPage() {
           increment_step: existing?.increment_step ?? 10,
           xp_settings: xpSettings,
           role_milestones: milestones,
-        }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
-      }
-      setData((prev) => ({
-        ...prev,
-        configs: {
-          ...prev.configs,
-          [guildId]: {
-            id: existing?.id ?? "",
-            guild_id: guildId,
-            enabled: newEnabled,
-            base_xp: existing?.base_xp ?? 100,
-            start_increment: existing?.start_increment ?? 20,
-            increment_step: existing?.increment_step ?? 10,
-            xp_settings: xpSettings,
-            role_milestones: milestones,
-          },
         },
-      }));
-      setStatusMessage("");
-    } catch (error) {
-      setStatusMessage(`Error: ${(error as Error).message}`);
-    }
+      },
+    }));
   }
 
   function toggleModalEvent(key: string) {
@@ -194,23 +185,20 @@ function LeaderboardConfigPage() {
       const existing = data.configs[editingGuild.id];
       const updatedMilestones = modalMilestones.map((m) => ({ ...m, remove_previous: modalRemovePrevious, hoist: modalHoist }));
 
-      const response = await fetch("/api/dashboard/leaderboard/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          guild_id: editingGuild.id,
-          enabled: existing?.enabled ?? true,
-          base_xp: existing?.base_xp ?? 100,
-          start_increment: existing?.start_increment ?? 20,
-          increment_step: existing?.increment_step ?? 10,
-          xp_settings: filteredXpSettings,
-          role_milestones: updatedMilestones,
-        }),
+      await api.post("/api/dashboard/leaderboard/config", {
+        guild_id: editingGuild.id,
+        enabled: existing?.enabled ?? true,
+        base_xp: existing?.base_xp ?? 100,
+        start_increment: existing?.start_increment ?? 20,
+        increment_step: existing?.increment_step ?? 10,
+        xp_settings: filteredXpSettings,
+        role_milestones: updatedMilestones,
+      }, {
+        showSuccess: true,
+        successMessage: "Leaderboard configuration saved",
+        showError: false,
+        onError: (err) => setFormError(err.message),
       });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
-      }
 
       setData((prev) => ({
         ...prev,
@@ -230,8 +218,6 @@ function LeaderboardConfigPage() {
       }));
 
       closeModal();
-    } catch (error) {
-      setFormError((error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -312,10 +298,6 @@ function LeaderboardConfigPage() {
       <Navbar title="Leaderboard Configuration" />
 
       <main className="flex-1 overflow-y-auto space-y-4 px-6 py-6">
-        {statusMessage ? (
-          <p className="text-sm text-discord-400">{statusMessage}</p>
-        ) : null}
-
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -343,9 +325,7 @@ function LeaderboardConfigPage() {
           {editingGuild?.name ?? `Guild ${editingGuild?.id}`}
         </h2>
 
-        {formError ? (
-          <p className="mt-3 rounded-lg bg-red-900/30 px-3 py-2 text-xs text-red-400">{formError}</p>
-        ) : null}
+        <FormError message={formError} />
 
         <div className="mt-4 space-y-4">
           <div>

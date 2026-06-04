@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import type { Channel, Guild, Overview, Repository, WebhookConfig, SummaryConfig, SessionInfo } from "../types";
 import Navbar from "../components/Navbar";
 import DashboardSection from "../components/DashboardSection";
-import { fetchJson } from "../lib/api";
+import { api } from "../lib/api";
+import { showError } from "../lib/toast";
 
 type DashboardState = {
   overview: Overview | null;
@@ -32,19 +33,20 @@ function Dashboard() {
     setStatus("Loading data...");
     try {
       const [overview, guilds, repositories, webhooks, channels, summaryConfigs, sessionInfo] = await Promise.all([
-        fetchJson<Overview>("/api/dashboard/overview"),
-        fetchJson<Guild[]>("/api/dashboard/guilds"),
-        fetchJson<Repository[]>("/api/dashboard/repositories"),
-        fetchJson<WebhookConfig[]>("/api/dashboard/webhooks"),
-        fetchJson<Channel[]>("/api/dashboard/channels"),
-        fetchJson<SummaryConfig[]>("/api/dashboard/summary-configs"),
-        fetchJson<SessionInfo>("/api/dashboard/session"),
+        api.get<Overview>("/api/dashboard/overview", { showError: false }),
+        api.get<Guild[]>("/api/dashboard/guilds", { showError: false }),
+        api.get<Repository[]>("/api/dashboard/repositories", { showError: false }),
+        api.get<WebhookConfig[]>("/api/dashboard/webhooks", { showError: false }),
+        api.get<Channel[]>("/api/dashboard/channels", { showError: false }),
+        api.get<SummaryConfig[]>("/api/dashboard/summary-configs", { showError: false }),
+        api.get<SessionInfo>("/api/dashboard/session", { showError: false }),
       ]);
       setData({ overview, guilds, repositories, webhooks, channels, summaryConfigs });
       setSession(sessionInfo);
       setStatus("Live");
     } catch (error) {
-      setStatus(`Error: ${(error as Error).message}`);
+      showError((error as Error).message);
+      setStatus("Error");
     }
   }
 

@@ -6,15 +6,15 @@ import { ConfigList } from "../components/ConfigView";
 import { SearchIcon, ChevronIcon } from "../components/Icons";
 import SearchDropdown from "../components/SearchDropdown";
 import { getLevelProgress } from "../lib/xp";
-import { fetchJson } from "../lib/api";
+import { api } from "../lib/api";
 import GitHubAvatar from "../components/GitHubAvatar";
 import { SkeletonCard, SkeletonLine, SkeletonCircle } from "../components/Skeleton";
+import { showError } from "../lib/toast";
 
 function Leaderboard() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusMessage, setStatusMessage] = useState("");
   const [guildFilter, setGuildFilter] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -22,17 +22,18 @@ function Leaderboard() {
   async function loadData() {
     setLoading(true);
     try {
-      const guildsData = await fetchJson<Guild[]>("/api/dashboard/guilds");
+      const guildsData = await api.get<Guild[]>("/api/dashboard/guilds", { showError: false });
       setGuilds(guildsData);
 
       const params = new URLSearchParams();
       if (guildFilter) params.set("guild_id", guildFilter);
-      const entriesData = await fetchJson<LeaderboardEntry[]>(
-        `/api/dashboard/leaderboard${params.toString() ? `?${params.toString()}` : ""}`
+      const entriesData = await api.get<LeaderboardEntry[]>(
+        `/api/dashboard/leaderboard${params.toString() ? `?${params.toString()}` : ""}`,
+        { showError: false }
       );
       setEntries(entriesData);
     } catch (error) {
-      setStatusMessage(`Error: ${(error as Error).message}`);
+      showError((error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -109,10 +110,6 @@ function Leaderboard() {
             Refresh
           </button>
         </div>
-
-        {statusMessage ? (
-          <p className="text-sm text-discord-400">{statusMessage}</p>
-        ) : null}
 
         {loading ? (
           <>

@@ -8,8 +8,11 @@ import Toggle from "../components/Toggle";
 import CheckButton from "../components/CheckButton";
 import NumberStepper from "../components/NumberStepper";
 import Modal from "../components/Modal";
+import FormError from "../components/FormError";
 import { SkeletonCard, SkeletonLine } from "../components/Skeleton";
-import { fetchJson } from "../lib/api";
+import { showError } from "../lib/toast";
+import { useConfirm } from "../components/ConfirmDialog";
+import { api } from "../lib/api";
 
 type PageData = {
   guilds: Guild[];
@@ -51,7 +54,8 @@ const emptySubForm: SubForm = {
 function RepositoryConnections() {
   const [data, setData] = useState<PageData>({ guilds: [], repositories: [], connections: [], channels: [] });
   const [loading, setLoading] = useState(true);
-  const [statusMessage, setStatusMessage] = useState("");
+
+  const confirm = useConfirm();
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<CreateForm>(emptyCreateForm);
@@ -70,14 +74,14 @@ function RepositoryConnections() {
     setLoading(true);
     try {
       const [guilds, repositories, connections, channels] = await Promise.all([
-        fetchJson<Guild[]>("/api/dashboard/guilds"),
-        fetchJson<Repository[]>("/api/dashboard/repositories"),
-        fetchJson<WebhookConfig[]>("/api/dashboard/webhooks"),
-        fetchJson<Channel[]>("/api/dashboard/channels"),
+        api.get<Guild[]>("/api/dashboard/guilds", { showError: false }),
+        api.get<Repository[]>("/api/dashboard/repositories", { showError: false }),
+        api.get<WebhookConfig[]>("/api/dashboard/webhooks", { showError: false }),
+        api.get<Channel[]>("/api/dashboard/channels", { showError: false }),
       ]);
       setData({ guilds, repositories, connections, channels });
     } catch (error) {
-      setStatusMessage(`Error: ${(error as Error).message}`);
+      showError((error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -142,19 +146,14 @@ function RepositoryConnections() {
         body.channel_id = form.channel_id;
       }
 
-      const response = await fetch("/api/dashboard/webhooks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+      await api.post("/api/dashboard/webhooks", body, {
+        showSuccess: true,
+        successMessage: "Connection created",
+        showError: false,
+        onError: (err) => setFormError(err.message),
       });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
-      }
       closeModal();
       await loadData();
-    } catch (error) {
-      setFormError((error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -168,7 +167,6 @@ function RepositoryConnections() {
       const url = isEditing
         ? `/api/dashboard/webhooks/${subModal.webhookId}/subscriptions/${subModal.editingSub!.id}`
         : `/api/dashboard/webhooks/${subModal.webhookId}/subscriptions`;
-      const method = isEditing ? "PUT" : "POST";
 
       const body: Record<string, unknown> = {
         guild_id: subForm.guild_id,
@@ -178,80 +176,60 @@ function RepositoryConnections() {
         events: subForm.events,
       };
 
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
+      if (isEditing) {
+        await api.put(url, body, {
+          showSuccess: true,
+          successMessage: "Subscription saved",
+        });
+      } else {
+        await api.post(url, body, {
+          showSuccess: true,
+          successMessage: "Subscription saved",
+        });
       }
       closeSubModal();
       await loadData();
-    } catch (error) {
-      setStatusMessage(`Error: ${(error as Error).message}`);
     } finally {
       setSubSaving(false);
     }
   }
 
   async function handleRemoveSub(subscriptionId: string) {
-    if (!window.confirm("Remove this subscription?")) return;
-    setStatusMessage("Removing...");
-    try {
-      const parent = data.connections.find((c) =>
-        c.subscriptions.some((s) => s.id === subscriptionId)
-      );
-      if (!parent) return;
-      const response = await fetch(
-        `/api/dashboard/webhooks/${parent.id}/subscriptions/${subscriptionId}`,
-        { method: "DELETE" }
-      );
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
-      }
-      setStatusMessage("");
-      await loadData();
-    } catch (error) {
-      setStatusMessage(`Error: ${(error as Error).message}`);
-    }
+    if (!(await confirm("Remove this subscription?"))) return;
+    const parent = data.connections.find((c) =>
+      c.subscriptions.some((s) => s.id === subscriptionId)
+    );
+    if (!parent) return;
+    await api.delete(`/api/dashboard/webhooks/${parent.id}/subscriptions/${subscriptionId}`, {
+      showSuccess: true,
+      successMessage: "Subscription removed",
+    });
+    await loadData();
   }
 
   async function handleDeleteConnection(connectionId: string) {
-    if (!window.confirm("Delete this connection and all its subscriptions?")) return;
-    setStatusMessage("Deleting...");
-    try {
-      const response = await fetch(`/api/dashboard/webhooks/${connectionId}`, { method: "DELETE" });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
-      }
-      setStatusMessage("");
-      await loadData();
-    } catch (error) {
-      setStatusMessage(`Error: ${(error as Error).message}`);
-    }
+    if (!(await confirm("Delete this connection and all its subscriptions?", { danger: true }))) return;
+    await api.delete(`/api/dashboard/webhooks/${connectionId}`, {
+      showSuccess: true,
+      successMessage: "Connection deleted",
+    });
+    await loadData();
   }
 
   async function handleSendTest(connectionId: string, subscriptionId: string) {
     if (!testMessage.trim()) return;
     setTestSending(true);
     try {
-      const response = await fetch(`/api/dashboard/webhooks/${connectionId}/test`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: testMessage, subscription_id: subscriptionId }),
+      await api.post(`/api/dashboard/webhooks/${connectionId}/test`, {
+        message: testMessage,
+        subscription_id: subscriptionId,
+      }, {
+        showSuccess: true,
+        successMessage: "Test message sent",
+        errorPrefix: "Test error:",
       });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
-      }
       setTestMessage("");
       setTestTarget(null);
-    } catch (error) {
-      setStatusMessage(`Test error: ${(error as Error).message}`);
     } finally {
       setTestSending(false);
     }
@@ -445,10 +423,6 @@ function RepositoryConnections() {
           </div>
         ) : (
           <>
-            {statusMessage ? (
-              <p className="text-sm text-discord-400">{statusMessage}</p>
-            ) : null}
-
             <ConfigView
               items={data.connections}
               sortDefs={sortDefs}
@@ -472,9 +446,7 @@ function RepositoryConnections() {
       <Modal isOpen={showModal} onClose={closeModal} maxWidth="max-w-md">
         <h2 className="font-display text-lg text-discord-200">New Connection</h2>
 
-        {formError ? (
-          <p className="mt-3 rounded-lg bg-red-900/30 px-3 py-2 text-xs text-red-400">{formError}</p>
-        ) : null}
+        <FormError message={formError} />
 
         <div className="mt-4 space-y-4">
           <SearchDropdown

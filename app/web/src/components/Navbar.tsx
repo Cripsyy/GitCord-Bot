@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile, SessionInfo } from "../types";
 import { ChevronIcon } from "./Icons";
+import { showError } from "../lib/toast";
+import { api } from "../lib/api";
 
 
 type NavbarProps = {
@@ -20,30 +22,21 @@ function Navbar({ title }: NavbarProps) {
   const [disconnectingGithub, setDisconnectingGithub] = useState(false);
   const menuAreaRef = useRef<HTMLDivElement>(null);
 
-  async function fetchJson<T>(path: string): Promise<T> {
-    const response = await fetch(path);
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || response.statusText);
-    }
-    return response.json() as Promise<T>;
-  }
-
   async function loadSession() {
     try {
-      const session = await fetchJson<SessionInfo>("/api/dashboard/session");
+      const session = await api.get<SessionInfo>("/api/dashboard/session", { showError: false });
       setSessionInfo(session);
-    } catch {
-      /* ignore */
+    } catch (error) {
+      showError(`Session load failed: ${(error as Error).message}`);
     }
   }
 
   async function loadProfile() {
     try {
-      const profileData = await fetchJson<Profile>("/api/dashboard/profile");
+      const profileData = await api.get<Profile>("/api/dashboard/profile", { showError: false });
       setProfile(profileData);
-    } catch {
-      /* ignore */
+    } catch (error) {
+      showError(`Profile load failed: ${(error as Error).message}`);
     }
   }
 
@@ -65,11 +58,14 @@ function Navbar({ title }: NavbarProps) {
   async function handleDisconnectDiscord() {
     setDisconnectingDiscord(true);
     try {
-      await fetch("/api/oauth/disconnect/discord", { method: "POST" });
+      await api.post("/api/oauth/disconnect/discord", undefined, {
+        showSuccess: true,
+        successMessage: "Discord disconnected",
+        errorPrefix: "Failed to disconnect Discord:",
+      });
       setSessionInfo((prev) => ({ ...prev, discord_connected: false }));
       setProfile({ discord: null });
     } catch {
-      /* ignore */
     } finally {
       setDisconnectingDiscord(false);
     }
@@ -78,10 +74,13 @@ function Navbar({ title }: NavbarProps) {
   async function handleDisconnectGithub() {
     setDisconnectingGithub(true);
     try {
-      await fetch("/api/oauth/disconnect/github", { method: "POST" });
+      await api.post("/api/oauth/disconnect/github", undefined, {
+        showSuccess: true,
+        successMessage: "GitHub disconnected",
+        errorPrefix: "Failed to disconnect GitHub:",
+      });
       setSessionInfo((prev) => ({ ...prev, github_connected: false }));
     } catch {
-      /* ignore */
     } finally {
       setDisconnectingGithub(false);
     }

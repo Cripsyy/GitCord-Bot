@@ -7,8 +7,11 @@ import type { SortDef } from "../components/ConfigView";
 import Toggle from "../components/Toggle";
 import CheckButton from "../components/CheckButton";
 import Modal from "../components/Modal";
+import FormError from "../components/FormError";
 import { SkeletonCard, SkeletonLine } from "../components/Skeleton";
-import { fetchJson } from "../lib/api";
+import { showError } from "../lib/toast";
+import { useConfirm } from "../components/ConfirmDialog";
+import { api } from "../lib/api";
 
 type PageData = {
   guilds: Guild[];
@@ -39,7 +42,8 @@ const emptyForm: FormState = {
 function AutomatedSummaries() {
   const [data, setData] = useState<PageData>({ guilds: [], channels: [], configs: [] });
   const [loading, setLoading] = useState(true);
-  const [statusMessage, setStatusMessage] = useState("");
+
+  const confirm = useConfirm();
 
   const [showModal, setShowModal] = useState(false);
   const [editingConfig, setEditingConfig] = useState<SummaryConfig | null>(null);
@@ -51,13 +55,13 @@ function AutomatedSummaries() {
     setLoading(true);
     try {
       const [guilds, channels, configs] = await Promise.all([
-        fetchJson<Guild[]>("/api/dashboard/guilds"),
-        fetchJson<Channel[]>("/api/dashboard/channels"),
-        fetchJson<SummaryConfig[]>("/api/dashboard/summary-configs"),
+        api.get<Guild[]>("/api/dashboard/guilds", { showError: false }),
+        api.get<Channel[]>("/api/dashboard/channels", { showError: false }),
+        api.get<SummaryConfig[]>("/api/dashboard/summary-configs", { showError: false }),
       ]);
       setData({ guilds, channels, configs });
     } catch (error) {
-      setStatusMessage(`Error: ${(error as Error).message}`);
+      showError((error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -107,7 +111,6 @@ function AutomatedSummaries() {
       const url = isEditing
         ? `/api/dashboard/summary-configs/${editingConfig.id}`
         : "/api/dashboard/summary-configs";
-      const method = isEditing ? "PUT" : "POST";
 
       const body: Record<string, unknown> = {
         channel_id: form.channel_id,
@@ -122,38 +125,35 @@ function AutomatedSummaries() {
         body.guild_id = form.guild_id;
       }
 
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
+      if (isEditing) {
+        await api.put(url, body, {
+          showSuccess: true,
+          successMessage: "Summary schedule saved",
+          showError: false,
+          onError: (err) => setFormError(err.message),
+        });
+      } else {
+        await api.post(url, body, {
+          showSuccess: true,
+          successMessage: "Summary schedule saved",
+          showError: false,
+          onError: (err) => setFormError(err.message),
+        });
       }
       closeModal();
       await loadData();
-    } catch (error) {
-      setFormError((error as Error).message);
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete(configId: string) {
-    if (!window.confirm("Delete this summary configuration?")) return;
-    setStatusMessage("Deleting...");
-    try {
-      const response = await fetch(`/api/dashboard/summary-configs/${configId}`, { method: "DELETE" });
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || response.statusText);
-      }
-      setStatusMessage("Deleted");
-      await loadData();
-    } catch (error) {
-      setStatusMessage(`Error: ${(error as Error).message}`);
-    }
+    if (!(await confirm("Delete this summary configuration?", { danger: true }))) return;
+    await api.delete(`/api/dashboard/summary-configs/${configId}`, {
+      showSuccess: true,
+      successMessage: "Summary configuration deleted",
+    });
+    await loadData();
   }
 
   const guildOptions = data.guilds.map((g) => ({
@@ -275,10 +275,6 @@ function AutomatedSummaries() {
           </div>
         ) : (
           <>
-            {statusMessage ? (
-              <p className="text-sm text-discord-400">{statusMessage}</p>
-            ) : null}
-
             <ConfigView
               items={data.configs}
               sortDefs={summarySortDefs}
@@ -304,9 +300,7 @@ function AutomatedSummaries() {
           {editingConfig ? "Edit Summary Schedule" : "New Summary Schedule"}
         </h2>
 
-        {formError ? (
-          <p className="mt-3 rounded-lg bg-red-900/30 px-3 py-2 text-xs text-red-400">{formError}</p>
-        ) : null}
+        <FormError message={formError} />
 
         <div className="mt-4 space-y-4">
           {editingConfig ? (
