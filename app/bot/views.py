@@ -14,7 +14,7 @@ class PullRequestActionsView(discord.ui.View):
         settings: Settings,
         repo_full_name: str,
         pull_request_number: int,
-        guild_id: int | None,
+        guild_id: str | None,
     ):
         super().__init__(timeout=None)
         self.settings = settings

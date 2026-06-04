@@ -19,6 +19,8 @@ def create_session_factory(settings: Settings) -> sessionmaker[Session]:
 def init_database(settings: Settings) -> None:
     engine = create_engine_from_settings(settings)
     Base.metadata.create_all(bind=engine)
+    from app.core.migrations_v2 import run_v2_webhook_subscriptions
+    run_v2_webhook_subscriptions(engine)
 
 
 def get_session(settings: Settings) -> Generator[Session, None, None]:

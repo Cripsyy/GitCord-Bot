@@ -1,0 +1,174 @@
+import { useEffect, useRef, useState } from "react";
+import type { Profile, SessionInfo } from "../types";
+import { ChevronIcon } from "./Icons";
+import { showError } from "../lib/toast";
+import { api } from "../lib/api";
+
+
+type NavbarProps = {
+  title: string;
+};
+
+function Navbar({ title }: NavbarProps) {
+  const [profile, setProfile] = useState<Profile>({ discord: null });
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo>({
+    discord_connected: false,
+    github_connected: false,
+    discord_expired: false,
+    github_expired: false,
+  });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [disconnectingDiscord, setDisconnectingDiscord] = useState(false);
+  const [disconnectingGithub, setDisconnectingGithub] = useState(false);
+  const menuAreaRef = useRef<HTMLDivElement>(null);
+
+  async function loadSession() {
+    try {
+      const session = await api.get<SessionInfo>("/api/dashboard/session", { showError: false });
+      setSessionInfo(session);
+    } catch (error) {
+      showError(`Session load failed: ${(error as Error).message}`);
+    }
+  }
+
+  async function loadProfile() {
+    try {
+      const profileData = await api.get<Profile>("/api/dashboard/profile", { showError: false });
+      setProfile(profileData);
+    } catch (error) {
+      showError(`Profile load failed: ${(error as Error).message}`);
+    }
+  }
+
+  useEffect(() => {
+    loadSession();
+    loadProfile();
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuOpen && menuAreaRef.current && !menuAreaRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
+
+  async function handleDisconnectDiscord() {
+    setDisconnectingDiscord(true);
+    try {
+      await api.post("/api/oauth/disconnect/discord", undefined, {
+        showSuccess: true,
+        successMessage: "Discord disconnected",
+        errorPrefix: "Failed to disconnect Discord:",
+      });
+      setSessionInfo((prev) => ({ ...prev, discord_connected: false }));
+      setProfile({ discord: null });
+    } catch {
+    } finally {
+      setDisconnectingDiscord(false);
+    }
+  }
+
+  async function handleDisconnectGithub() {
+    setDisconnectingGithub(true);
+    try {
+      await api.post("/api/oauth/disconnect/github", undefined, {
+        showSuccess: true,
+        successMessage: "GitHub disconnected",
+        errorPrefix: "Failed to disconnect GitHub:",
+      });
+      setSessionInfo((prev) => ({ ...prev, github_connected: false }));
+    } catch {
+    } finally {
+      setDisconnectingGithub(false);
+    }
+  }
+
+  return (
+    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-discord-900 px-6 py-5">
+      <div>
+        <h1 className="font-display text-2xl text-discord-200">{title}</h1>
+      </div>
+      <div className="relative flex flex-wrap items-center gap-3" ref={menuAreaRef}>
+        <button
+          type="button"
+          onClick={() => setMenuOpen((prev) => !prev)}
+          className="flex items-center gap-3 rounded-full border border-white/5 bg-discord-850 px-3 py-2 shadow-soft"
+        >
+          {profile.discord ? (
+            <img
+              src={profile.discord.avatar_url}
+              alt={profile.discord.username}
+              className="h-8 w-8 rounded-full"
+            />
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-discord-800" />
+          )}
+          <span className="text-xs text-discord-200">{profile.discord?.username ?? "Admin User"}</span>
+          <span className="text-discord-500">
+            <ChevronIcon open={menuOpen} />
+          </span>
+        </button>
+        {menuOpen ? (
+          <div className="absolute right-0 top-14 z-10 w-72 rounded-2xl border border-white/5 bg-discord-850 p-3 shadow-soft">
+            <div className="flex items-center justify-between rounded-lg border border-white/5 bg-discord-900 px-3 py-2 text-xs">
+              <span className="text-discord-500">Discord</span>
+              <span className={`flex items-center gap-1.5 ${sessionInfo.discord_connected && !sessionInfo.discord_expired ? "text-discord-green" : sessionInfo.discord_expired ? "text-amber-400" : "text-red-400"}`}>
+                <span className={`h-2 w-2 rounded-full ${sessionInfo.discord_connected && !sessionInfo.discord_expired ? "bg-discord-green" : sessionInfo.discord_expired ? "bg-amber-400" : "bg-red-400"}`} />
+                {sessionInfo.discord_expired ? "Expired" : sessionInfo.discord_connected ? "Connected" : "Not Connected"}
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-center justify-between rounded-lg border border-white/5 bg-discord-900 px-3 py-2 text-xs">
+              <span className="text-discord-500">GitHub</span>
+              <span className={`flex items-center gap-1.5 ${sessionInfo.github_connected && !sessionInfo.github_expired ? "text-discord-green" : sessionInfo.github_expired ? "text-amber-400" : "text-red-400"}`}>
+                <span className={`h-2 w-2 rounded-full ${sessionInfo.github_connected && !sessionInfo.github_expired ? "bg-discord-green" : sessionInfo.github_expired ? "bg-amber-400" : "bg-red-400"}`} />
+                {sessionInfo.github_expired ? "Expired" : sessionInfo.github_connected ? "Connected" : "Not Connected"}
+              </span>
+            </div>
+
+            <div className="mt-2 space-y-1">
+              {!sessionInfo.discord_connected ? (
+                <a
+                  href="/api/oauth/discord/login"
+                  className="block rounded-lg border border-white/10 bg-discord-900 px-3 py-2 text-xs text-discord-200 hover:bg-discord-800"
+                >
+                  Connect Discord
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleDisconnectDiscord}
+                  disabled={disconnectingDiscord}
+                  className="w-full rounded-lg border border-white/10 bg-discord-900 px-3 py-2 text-xs text-red-400 hover:bg-discord-800 disabled:opacity-60"
+                >
+                  {disconnectingDiscord ? "Disconnecting..." : "Disconnect Discord"}
+                </button>
+              )}
+              {!sessionInfo.github_connected ? (
+                <a
+                  href="/api/oauth/github/login"
+                  className="block rounded-lg border border-white/10 bg-discord-900 px-3 py-2 text-xs text-discord-200 hover:bg-discord-800"
+                >
+                  Connect GitHub
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleDisconnectGithub}
+                  disabled={disconnectingGithub}
+                  className="w-full rounded-lg border border-white/10 bg-discord-900 px-3 py-2 text-xs text-red-400 hover:bg-discord-800 disabled:opacity-60"
+                >
+                  {disconnectingGithub ? "Disconnecting..." : "Disconnect GitHub"}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </header>
+  );
+}
+
+export default Navbar;

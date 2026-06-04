@@ -29,6 +29,13 @@ def configure_logging(
     root_logger.handlers.clear()  # Clear any existing handlers
     root_logger.addHandler(console_handler)
 
+    class HealthCheckFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "/api/health" not in record.getMessage()
+
+    access_logger = logging.getLogger("uvicorn.access")
+    access_logger.addFilter(HealthCheckFilter())
+
     # Optional database handler
     if database_url:
         try:

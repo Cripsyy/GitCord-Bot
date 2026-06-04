@@ -44,7 +44,6 @@ def summarize_pull_request_diff(
     pull_request_body: str,
     diff_text: str,
     ai_summary_enabled: bool = True,
-    llm_model: str | None = None,
     ai_max_diff_chars: int = 12000,
 ) -> str | None:
     if not ai_summary_enabled:
@@ -66,7 +65,7 @@ def summarize_pull_request_diff(
     )
 
     payload = {
-        "model": llm_model or settings.llm_model,
+        "model": "gpt-4o-mini",
         "temperature": 0.2,
         "messages": [
             {"role": "system", "content": prompt},

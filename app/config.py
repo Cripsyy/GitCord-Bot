@@ -10,9 +10,14 @@ class Settings(BaseSettings):
     database_url: str
     llm_api_key: str | None = None
     llm_base_url: str = "https://api.openai.com/v1"
-    llm_model: str = "gpt-4o-mini"
     llm_timeout_seconds: int = 20
     log_level: str = "INFO"
+    dashboard_api_key: str | None = None
+    discord_client_id: str | None = None
+    discord_client_secret: str | None = None
+    github_client_id: str | None = None
+    github_client_secret: str | None = None
+    oauth_redirect_base_url: str = "http://localhost:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",
