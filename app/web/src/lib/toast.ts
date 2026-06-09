@@ -3,7 +3,6 @@ import { toast } from "sonner";
 export function showError(message: string) {
   toast.error(message, {
     className: "!bg-red-950 !border-red-800",
-    duration: 300000000
   });
 }
 

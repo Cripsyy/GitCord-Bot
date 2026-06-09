@@ -62,7 +62,7 @@ function RepositoryConnections() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const [subModal, setSubModal] = useState<{ webhookId: string; editingSub?: WebhookSubscription } | null>(null);
+  const [subModal, setSubModal] = useState<{ webhookId: string; editingSub?: WebhookSubscription; finalize?: boolean } | null>(null);
   const [subForm, setSubForm] = useState<SubForm>(emptySubForm);
   const [subSaving, setSubSaving] = useState(false);
 
@@ -102,7 +102,7 @@ function RepositoryConnections() {
     setFormError("");
   }
 
-  function openSubModal(webhookId: string, editingSub?: WebhookSubscription) {
+  function openSubModal(webhookId: string, editingSub?: WebhookSubscription, finalize?: boolean) {
     if (editingSub) {
       setSubForm({
         guild_id: editingSub.guild_id,
@@ -114,7 +114,7 @@ function RepositoryConnections() {
     } else {
       setSubForm(emptySubForm);
     }
-    setSubModal({ webhookId, editingSub });
+    setSubModal({ webhookId, editingSub, finalize });
   }
 
   function closeSubModal() {
@@ -137,22 +137,39 @@ function RepositoryConnections() {
   async function handleCreate() {
     setSaving(true);
     setFormError("");
+
+    if ((form.guild_id && !form.channel_id) || (!form.guild_id && form.channel_id)) {
+      setFormError("Both server and channel must be selected together, or leave both empty.");
+      setSaving(false);
+      return;
+    }
+
+    const hasSubscription = !!(form.guild_id && form.channel_id);
     try {
       const body: Record<string, unknown> = {
         repository_full_name: form.repository_full_name,
       };
-      if (form.guild_id && form.channel_id) {
+      if (hasSubscription) {
         body.guild_id = form.guild_id;
         body.channel_id = form.channel_id;
       }
 
-      await api.post("/api/dashboard/webhooks", body, {
+      const createdConfig = await api.post<WebhookConfig>("/api/dashboard/webhooks", body, {
         showSuccess: true,
         successMessage: "Connection created",
         showError: false,
         onError: (err) => setFormError(err.message),
       });
+
       closeModal();
+
+      if (hasSubscription && createdConfig) {
+        const sub = createdConfig.subscriptions?.[0];
+        if (sub) {
+          openSubModal(createdConfig.id, sub, true);
+        }
+      }
+
       await loadData();
     } finally {
       setSaving(false);
@@ -175,6 +192,9 @@ function RepositoryConnections() {
         ai_max_diff_chars: subForm.ai_max_diff_chars,
         events: subForm.events,
       };
+      if (subModal.finalize) {
+        body.finalize = true;
+      }
 
       if (isEditing) {
         await api.put(url, body, {
@@ -334,6 +354,14 @@ function RepositoryConnections() {
                         <input
                           value={testMessage}
                           onChange={(e) => setTestMessage(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && testMessage.trim()) {
+                              e.preventDefault();
+                              handleSendTest(connection.id, sub.id);
+                            } else if (e.key === "Escape") {
+                              setTestTarget(null);
+                            }
+                          }}
                           placeholder="Type a test message..."
                           className="min-w-0 flex-1 rounded-md border border-white/10 bg-discord-900 px-2 py-1 text-sm text-discord-200 outline-none focus:border-discord-blurple"
                         />

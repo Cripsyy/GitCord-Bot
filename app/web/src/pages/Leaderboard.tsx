@@ -19,6 +19,9 @@ function Leaderboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  const countKey = guildFilter ? `leaderboard_count_${guildFilter}` : "leaderboard_count_all";
+  const cachedCount = Number(localStorage.getItem(countKey) || 0);
+
   async function loadData() {
     setLoading(true);
     try {
@@ -32,6 +35,7 @@ function Leaderboard() {
         { showError: false }
       );
       setEntries(entriesData);
+      localStorage.setItem(countKey, String(entriesData.length));
     } catch (error) {
       showError((error as Error).message);
     } finally {
@@ -113,27 +117,29 @@ function Leaderboard() {
 
         {loading ? (
           <>
-            <div className="grid gap-3 sm:gap-5 items-end grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex flex-col items-center min-w-0">
-                  <SkeletonCircle size="h-16 w-16" />
-                  <SkeletonLine className="mt-2 h-3 w-20" />
-                  <SkeletonLine className="mt-1 mb-2 h-2.5 w-16" />
-                  <div
-                    className={`w-full rounded-xl border border-white/5 bg-discord-850 flex flex-col items-center justify-start text-center px-4 pt-5 pb-4 ${
-                      i === 2 ? "h-[180px]" : "h-[140px]"
-                    }`}
-                  >
-                    <SkeletonLine className="h-8 w-8" />
-                    <SkeletonLine className="mt-1 h-2.5 w-10" />
-                    <SkeletonLine className="mt-3 h-5 w-16" />
-                    <div className="mt-auto w-full">
-                      <SkeletonLine className="h-1.5 w-full" />
+            {(entries.length > 0 ? entries.length : cachedCount) >= 3 && (
+              <div className="grid gap-3 sm:gap-5 items-end grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex flex-col items-center min-w-0">
+                    <SkeletonCircle size="h-16 w-16" />
+                    <SkeletonLine className="mt-2 h-3 w-20" />
+                    <SkeletonLine className="mt-1 mb-2 h-2.5 w-16" />
+                    <div
+                      className={`w-full rounded-xl border border-white/5 bg-discord-850 flex flex-col items-center justify-start text-center px-4 pt-5 pb-4 ${
+                        i === 2 ? "h-[180px]" : "h-[140px]"
+                      }`}
+                    >
+                      <SkeletonLine className="h-8 w-8" />
+                      <SkeletonLine className="mt-1 h-2.5 w-10" />
+                      <SkeletonLine className="mt-3 h-5 w-16" />
+                      <div className="mt-auto w-full">
+                        <SkeletonLine className="h-1.5 w-full" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (
                 <SkeletonCard key={i}>

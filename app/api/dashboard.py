@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request, status
 
+import asyncio
 import discord
 import secrets
 import re
@@ -398,7 +399,7 @@ async def send_test_webhook_message(request: Request, webhook_id: str, payload: 
         )
         embed.add_field(name="Repository", value=webhook.repository_full_name, inline=False)
         embed.add_field(name="Channel ID", value=str(channel_id), inline=False)
-        await bot_client.send_embed_to_channel(channel_id, embed)
+        asyncio.create_task(bot_client.send_embed_to_channel(channel_id, embed))
         return {"status": "sent"}
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
 
@@ -407,6 +408,7 @@ async def send_test_webhook_message(request: Request, webhook_id: str, payload: 
 async def delete_webhook(request: Request, webhook_id: str) -> None:
     _require_full_session(request)
     settings: Settings = request.app.state.settings
+    bot_client = request.app.state.bot_client
     github_user_id = request.cookies.get("github_user_id")
     github_token = None
     if github_user_id:
@@ -417,6 +419,14 @@ async def delete_webhook(request: Request, webhook_id: str) -> None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
         repo = webhook.repository_full_name
         secret_slug = webhook.secret_slug
+
+        subs = (
+            session.query(WebhookSubscription)
+            .filter(WebhookSubscription.webhook_config_id == webhook.id)
+            .all()
+        )
+        subscribed_channel_ids = [sub.channel_id for sub in subs]
+
         if github_token is not None:
             webhook_url_base = settings.oauth_redirect_base_url.rstrip("/")
             webhook_url = f"{webhook_url_base}/webhooks/github/{secret_slug}"
@@ -435,6 +445,18 @@ async def delete_webhook(request: Request, webhook_id: str) -> None:
                 ) from exc
         session.delete(webhook)
         session.commit()
+
+        for ch_id in subscribed_channel_ids:
+            try:
+                embed = discord.Embed(
+                    title="Repository Connection Removed",
+                    description=f"**{repo}** is no longer connected to this channel.",
+                    color=discord.Color.red(),
+                )
+                asyncio.create_task(bot_client.send_embed_to_channel(ch_id, embed))
+            except Exception:
+                pass
+
         return None
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
 
@@ -499,7 +521,7 @@ async def add_subscription(request: Request, webhook_id: str, payload: dict[str,
             )
             embed.add_field(name="Events", value=", ".join(events), inline=True)
             embed.add_field(name="AI Summaries", value="Enabled" if ai_summary_enabled else "Disabled", inline=True)
-            await bot_client.send_embed_to_channel(channel_id, embed)
+            asyncio.create_task(bot_client.send_embed_to_channel(channel_id, embed))
         except Exception:
             pass
 
@@ -539,20 +561,35 @@ async def update_subscription(request: Request, webhook_id: str, subscription_id
         if raw_events is not None and isinstance(raw_events, list):
             sub.events = raw_events
 
+        finalize = bool(payload.get("finalize"))
+
         session.commit()
         session.refresh(sub)
 
-        try:
-            embed = discord.Embed(
-                title="Subscription Updated",
-                description=f"Settings for **{config.repository_full_name}** have been updated.",
-                color=discord.Color.blurple(),
-            )
-            embed.add_field(name="Events", value=", ".join(sub.events), inline=True)
-            embed.add_field(name="AI Summaries", value="Enabled" if sub.ai_summary_enabled else "Disabled", inline=True)
-            await bot_client.send_embed_to_channel(sub.channel_id, embed)
-        except Exception:
-            pass
+        if finalize:
+            try:
+                embed = discord.Embed(
+                    title="Repository Connection Active",
+                    description=f"**{config.repository_full_name}** is now connected to this channel.",
+                    color=discord.Color.green(),
+                )
+                embed.add_field(name="Events", value=", ".join(sub.events), inline=True)
+                embed.add_field(name="AI Summaries", value="Enabled" if sub.ai_summary_enabled else "Disabled", inline=True)
+                asyncio.create_task(bot_client.send_embed_to_channel(sub.channel_id, embed))
+            except Exception:
+                pass
+        else:
+            try:
+                embed = discord.Embed(
+                    title="Subscription Updated",
+                    description=f"Settings for **{config.repository_full_name}** have been updated.",
+                    color=discord.Color.blurple(),
+                )
+                embed.add_field(name="Events", value=", ".join(sub.events), inline=True)
+                embed.add_field(name="AI Summaries", value="Enabled" if sub.ai_summary_enabled else "Disabled", inline=True)
+                asyncio.create_task(bot_client.send_embed_to_channel(sub.channel_id, embed))
+            except Exception:
+                pass
 
         return _sub_dict(sub)
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable")
@@ -581,7 +618,7 @@ async def remove_subscription(request: Request, webhook_id: str, subscription_id
                 description=f"**{repo_name}** is no longer connected to this channel.",
                 color=discord.Color.red(),
             )
-            await bot_client.send_embed_to_channel(channel_id, embed)
+            asyncio.create_task(bot_client.send_embed_to_channel(channel_id, embed))
         except Exception:
             pass
 
@@ -637,6 +674,7 @@ async def list_repositories(request: Request) -> list[dict[str, object]]:
 async def update_subscriptions(request: Request, payload: dict[str, object]) -> dict[str, object]:
     _require_full_session(request)
     settings: Settings = request.app.state.settings
+    bot_client = request.app.state.bot_client
 
     github_user_id = request.cookies.get("github_user_id")
     if not github_user_id:
@@ -665,6 +703,7 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
         config_by_repo = {c.repository_full_name: c for c in configs}
 
         repos_to_provision: list[str] = []
+        newly_added_repos: list[str] = []
 
         for repo in repo_set:
             if repo in config_by_repo:
@@ -700,6 +739,7 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
                 )
                 session.add(sub)
                 session.flush()
+                newly_added_repos.append(repo)
 
         for repo in repo_set:
             config = config_by_repo[repo]
@@ -732,6 +772,18 @@ async def update_subscriptions(request: Request, payload: dict[str, object]) -> 
             })
 
         session.commit()
+
+        for repo in newly_added_repos:
+            try:
+                embed = discord.Embed(
+                    title="Repository Connection Active",
+                    description=f"**{repo}** is now connected to this channel.",
+                    color=discord.Color.green(),
+                )
+                asyncio.create_task(bot_client.send_embed_to_channel(channel_id, embed))
+            except Exception:
+                pass
+
         break
 
     return {"subscriptions": results}

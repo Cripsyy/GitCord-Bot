@@ -210,6 +210,8 @@ async def _process_webhook_event(
                 diff_text = None
 
         for sub in subscriptions:
+            if "pull_request" not in sub.get("events", []):
+                continue
             ai_summary: str | None = None
             if sub.get("ai_summary_enabled", True):
                 try:
@@ -249,6 +251,8 @@ async def _process_webhook_event(
         return
 
     for sub in subscriptions:
+        if event_type not in sub.get("events", []):
+            continue
         try:
             await bot_client.send_embed_to_channel(sub["channel_id"], embed)
         except Exception:
