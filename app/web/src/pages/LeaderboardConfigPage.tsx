@@ -6,6 +6,7 @@ import type { SortDef } from "../components/ConfigView";
 import Toggle from "../components/Toggle";
 import CheckButton from "../components/CheckButton";
 import NumberStepper from "../components/NumberStepper";
+import Tooltip from "../components/Tooltip";
 import Modal from "../components/Modal";
 import FormError from "../components/FormError";
 import { SkeletonCard, SkeletonLine } from "../components/Skeleton";
@@ -52,6 +53,12 @@ function LeaderboardConfigPage() {
   const [modalHoist, setModalHoist] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+  const [editingMilestoneIdx, setEditingMilestoneIdx] = useState<number | null>(null);
+  const [milestoneForm, setMilestoneForm] = useState<LeaderboardRoleMilestone>({
+    level: 5, role_name: "Level 5", remove_previous: true, color: "#1abc9c", hoist: true,
+  });
 
   async function loadData() {
     setLoading(true);
@@ -150,22 +157,45 @@ function LeaderboardConfigPage() {
     });
   }
 
-  function updateModalMilestone(index: number, field: keyof LeaderboardRoleMilestone, value: unknown) {
-    setModalMilestones((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
-  }
-
-  function addModalMilestone() {
+  function openAddMilestone() {
     const maxLevel = modalMilestones.reduce((max, m) => Math.max(max, m.level), 0);
     const palette = ["#e74c3c", "#e67e22", "#f1c40f", "#2ecc71", "#1abc9c", "#3498db", "#9b59b6", "#34495e"];
     const nextColor = palette[modalMilestones.length % palette.length];
-    setModalMilestones((prev) => [
-      ...prev,
-      { level: maxLevel + 5, role_name: `Level ${maxLevel + 5}`, remove_previous: modalRemovePrevious, color: nextColor, hoist: modalHoist },
-    ]);
+    setMilestoneForm({
+      level: maxLevel + 5,
+      role_name: `Level ${maxLevel + 5}`,
+      remove_previous: modalRemovePrevious,
+      color: nextColor,
+      hoist: modalHoist,
+    });
+    setEditingMilestoneIdx(null);
+    setShowMilestoneModal(true);
+  }
+
+  function openEditMilestone(index: number) {
+    setMilestoneForm({ ...modalMilestones[index] });
+    setEditingMilestoneIdx(index);
+    setShowMilestoneModal(true);
+  }
+
+  function closeMilestoneModal() {
+    setShowMilestoneModal(false);
+    setEditingMilestoneIdx(null);
+  }
+
+  function handleSaveMilestone() {
+    setModalMilestones((prev) => {
+      let next: LeaderboardRoleMilestone[];
+      if (editingMilestoneIdx !== null) {
+        next = [...prev];
+        next[editingMilestoneIdx] = { ...milestoneForm };
+      } else {
+        next = [...prev, { ...milestoneForm }];
+      }
+      next.sort((a, b) => a.level - b.level);
+      return next;
+    });
+    closeMilestoneModal();
   }
 
   function removeModalMilestone(index: number) {
@@ -183,7 +213,7 @@ function LeaderboardConfigPage() {
       }
 
       const existing = data.configs[editingGuild.id];
-      const updatedMilestones = modalMilestones.map((m) => ({ ...m, remove_previous: modalRemovePrevious, hoist: modalHoist }));
+      const updatedMilestones = modalMilestones.map((m) => ({ ...m }));
 
       await api.post("/api/dashboard/leaderboard/config", {
         guild_id: editingGuild.id,
@@ -329,10 +359,10 @@ function LeaderboardConfigPage() {
 
         <div className="mt-4 space-y-4">
           <div>
-            <h3 className="font-display text-base text-discord-200">XP Settings</h3>
-            <p className="mt-1 text-xs text-discord-500">
-              Enable or disable XP awards per event type. Disabled events will not award XP.
-            </p>
+            <h3 className="font-display text-base text-discord-200">
+              XP Settings
+              <Tooltip>Award XP to users for GitHub activities. Toggle events on/off and set how much XP each is worth. Disabled events will not award XP.</Tooltip>
+            </h3>
             <div className="mt-4 space-y-2 max-h-[200px] overflow-y-auto">
               {XP_EVENTS.map(({ key, label }) => (
                 <div key={key} className="flex items-center gap-3 rounded-xl border border-white/5 bg-discord-900 px-4 py-2.5">
@@ -357,72 +387,29 @@ function LeaderboardConfigPage() {
 
           <div>
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-base text-discord-200">Role Milestones</h3>
-              <div className="flex items-center gap-3">
-                <CheckButton
-                  checked={modalHoist}
-                  onChange={() => setModalHoist((prev) => !prev)}
-                  size="md"
-                >
-                  Hoist
-                </CheckButton>
-                <CheckButton
-                  checked={modalRemovePrevious}
-                  onChange={() => setModalRemovePrevious((prev) => !prev)}
-                  size="md"
-                >
-                  Remove previous
-                </CheckButton>
-                <button
-                  type="button"
-                  onClick={addModalMilestone}
-                  className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-discord-400 hover:text-discord-200"
-                >
-                  + Add Milestone
-                </button>
-              </div>
+              <h3 className="font-display text-base text-discord-200">
+                Role Milestones
+                <Tooltip>Automatically assign Discord roles to users when they reach specific XP levels.</Tooltip>
+              </h3>
+              <button
+                type="button"
+                onClick={openAddMilestone}
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-discord-400 hover:text-discord-200"
+              >
+                + Add Milestone
+              </button>
             </div>
-            <p className="mt-1 text-xs text-discord-500">
-              Roles assigned when a user reaches a level.
-            </p>
-            <div className="mt-4 max-h-[13rem] space-y-2 overflow-y-auto">
+            <div className="mt-4 max-h-[10rem] space-y-2 overflow-y-auto">
               {modalMilestones.map((m, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-3 rounded-xl border border-white/5 bg-discord-900 px-4 py-3">
-                  <label className="text-xs text-discord-500">
-                    Level
-                    <NumberStepper
-                      value={m.level}
-                      onChange={(v) => updateModalMilestone(i, "level", v)}
-                      step={1}
-                      min={1}
-                      className="ml-2"
-                    />
-                  </label>
-                  <label className="text-xs text-discord-500">
-                    Role Name
-                    <input
-                      type="text"
-                      value={m.role_name}
-                      onChange={(e) => updateModalMilestone(i, "role_name", e.target.value)}
-                      className="ml-2 w-40 rounded-lg border border-white/10 bg-discord-850 px-2 py-1.5 text-sm text-discord-200 outline-none focus:border-discord-blurple"
-                    />
-                  </label>
-                  <label className="inline-flex items-center text-xs text-discord-500">
-                    Color
-                    <input
-                      type="color"
-                      value={m.color}
-                      onChange={(e) => updateModalMilestone(i, "color", e.target.value)}
-                      className="ml-2 h-6 w-8 cursor-pointer rounded border border-white/10 bg-transparent p-0.5"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => removeModalMilestone(i)}
-                    className="text-xs text-discord-500 hover:text-red-400"
-                  >
-                    Remove
-                  </button>
+                <div key={i} className="grid grid-cols-[3.5rem_minmax(0,10rem)_auto_auto_auto_auto] items-center gap-x-3 rounded-xl border border-white/5 bg-discord-900 px-4 py-3">
+                  <span className="text-discord-blurple font-semibold text-sm">Lvl {m.level}</span>
+                  <span className="truncate text-sm text-discord-200">{m.role_name}</span>
+                  <span className="inline-block w-3.5 h-3.5 rounded" style={{ backgroundColor: m.color }} />
+                  <span className="text-xs text-discord-500 whitespace-nowrap">
+                    {[m.hoist ? "Hoisted" : "", m.remove_previous ? "Replaces lower" : ""].filter(Boolean).join(" · ") || "\u00A0"}
+                  </span>
+                  <button type="button" onClick={() => openEditMilestone(i)} className="text-xs text-discord-500 hover:text-discord-200">Edit</button>
+                  <button type="button" onClick={() => removeModalMilestone(i)} className="text-xs text-discord-500 hover:text-red-400">Remove</button>
                 </div>
               ))}
             </div>
@@ -444,6 +431,92 @@ function LeaderboardConfigPage() {
             className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
             {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showMilestoneModal} onClose={closeMilestoneModal} maxWidth="max-w-sm">
+        <h2 className="font-display text-lg text-discord-200">
+          {editingMilestoneIdx !== null ? "Edit Milestone" : "New Milestone"}
+        </h2>
+
+        <div className="mt-4 space-y-4">
+          <label className="text-xs text-discord-500">
+            Level
+            <Tooltip>The XP level a user must reach to earn this role.</Tooltip>
+            <div className="mt-1">
+              <NumberStepper
+                value={milestoneForm.level}
+                onChange={(v) => setMilestoneForm((prev) => ({ ...prev, level: v }))}
+                step={1}
+                min={1}
+              />
+            </div>
+          </label>
+
+          <label className="text-xs text-discord-500">
+            Role Name
+            <Tooltip>The name of the Discord role created and assigned at this milestone.</Tooltip>
+            <input
+              type="text"
+              value={milestoneForm.role_name}
+              onChange={(e) => setMilestoneForm((prev) => ({ ...prev, role_name: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-white/10 bg-discord-900 px-3 py-2 text-sm text-discord-200 outline-none focus:border-discord-blurple"
+            />
+          </label>
+
+          <label className="inline-flex items-center text-xs text-discord-500">
+            Color
+            <Tooltip>The color of the Discord role, which controls the user's name color in the server.</Tooltip>
+            <input
+              type="color"
+              value={milestoneForm.color}
+              onChange={(e) => setMilestoneForm((prev) => ({ ...prev, color: e.target.value }))}
+              className="ml-2 h-6 w-8 cursor-pointer rounded border border-white/10 bg-transparent p-0.5"
+            />
+          </label>
+
+          <div>
+            <p className="mb-1.5 text-xs text-discord-500">
+              Options
+              <Tooltip>Hoist - Display this role separately in the member list sidebar, making it stand out. Remove Previous - Remove the previous role when a user reaches this level.</Tooltip>
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+            <CheckButton
+              checked={milestoneForm.hoist}
+              onChange={() => setMilestoneForm((prev) => ({ ...prev, hoist: !prev.hoist }))}
+              size="md"
+              className="w-full justify-center"
+            >
+              Hoist
+            </CheckButton>
+            <CheckButton
+              checked={milestoneForm.remove_previous}
+              onChange={() => setMilestoneForm((prev) => ({ ...prev, remove_previous: !prev.remove_previous }))}
+              size="md"
+              className="w-full justify-center"
+            >
+              Remove previous
+            </CheckButton>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={closeMilestoneModal}
+            className="rounded-lg border border-white/10 px-4 py-2 text-xs text-discord-400 hover:text-discord-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveMilestone}
+            disabled={!milestoneForm.role_name.trim()}
+            className="rounded-lg bg-discord-blurple px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {editingMilestoneIdx !== null ? "Save Changes" : "Add Milestone"}
           </button>
         </div>
       </Modal>

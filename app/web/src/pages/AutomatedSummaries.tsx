@@ -6,6 +6,7 @@ import ConfigView from "../components/ConfigView";
 import type { SortDef } from "../components/ConfigView";
 import Toggle from "../components/Toggle";
 import CheckButton from "../components/CheckButton";
+import Tooltip from "../components/Tooltip";
 import Modal from "../components/Modal";
 import FormError from "../components/FormError";
 import { SkeletonCard, SkeletonLine } from "../components/Skeleton";
@@ -310,6 +311,7 @@ function AutomatedSummaries() {
           ) : (
             <SearchDropdown
               label="Server"
+              tooltip="The Discord server that will receive the scheduled daily briefing."
               items={guildOptions}
               selected={form.guild_id}
               onSelect={(value) => {
@@ -327,6 +329,7 @@ function AutomatedSummaries() {
 
           <SearchDropdown
             label="Channel"
+            tooltip="The Discord text channel where the daily briefing will be posted."
             items={channelOptions}
             selected={form.channel_id}
             onSelect={(value) => updateForm("channel_id", value)}
@@ -335,6 +338,7 @@ function AutomatedSummaries() {
 
           <label className="text-xs text-discord-500">
             Send Time (UTC)
+            <Tooltip>The time of day in UTC when the automated summary is sent to the configured channel.</Tooltip>
             <input
               type="time"
               value={form.send_time}
@@ -345,7 +349,7 @@ function AutomatedSummaries() {
 
           <div>
             <p className="mb-1.5 text-xs text-discord-500">Include in Briefing</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { key: "include_prs", label: "Open PRs Needing Review" },
                 { key: "include_issues", label: "Unassigned Issues" },
@@ -355,6 +359,7 @@ function AutomatedSummaries() {
                   key={item.key}
                   checked={form[item.key as keyof FormState] as boolean}
                   onChange={() => updateForm(item.key as keyof FormState, !form[item.key as keyof FormState])}
+                  className="w-full justify-center"
                 >
                   {item.label}
                 </CheckButton>

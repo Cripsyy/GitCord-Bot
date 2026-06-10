@@ -1,17 +1,19 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import Tooltip from "./Tooltip";
 
 type DropdownItem = { value: string; label: string };
 
 type SearchDropdownProps = {
   label: string;
+  tooltip?: string;
   items: DropdownItem[];
   selected: string;
   onSelect: (value: string) => void;
   placeholder?: string;
 };
 
-export default function SearchDropdown({ label, items, selected, onSelect, placeholder }: SearchDropdownProps) {
+export default function SearchDropdown({ label, tooltip, items, selected, onSelect, placeholder }: SearchDropdownProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -72,6 +74,7 @@ export default function SearchDropdown({ label, items, selected, onSelect, place
   return (
     <label className="text-xs text-discord-500">
       {label}
+      {tooltip ? <Tooltip>{tooltip}</Tooltip> : null}
       <div className={label ? "mt-1" : ""}>
         <button
           ref={buttonRef}

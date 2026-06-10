@@ -7,6 +7,7 @@ import type { SortDef } from "../components/ConfigView";
 import Toggle from "../components/Toggle";
 import CheckButton from "../components/CheckButton";
 import NumberStepper from "../components/NumberStepper";
+import Tooltip from "../components/Tooltip";
 import Modal from "../components/Modal";
 import FormError from "../components/FormError";
 import { SkeletonCard, SkeletonLine } from "../components/Skeleton";
@@ -479,6 +480,7 @@ function RepositoryConnections() {
         <div className="mt-4 space-y-4">
           <SearchDropdown
             label="Repository"
+            tooltip="Select the GitHub repository to link. The bot will listen for webhook events from this repo."
             items={repoOptions}
             selected={form.repository_full_name}
             onSelect={(value) => updateCreateForm("repository_full_name", value)}
@@ -487,6 +489,7 @@ function RepositoryConnections() {
 
           <SearchDropdown
             label="Server (optional)"
+            tooltip="The Discord server that receives notifications. Leave empty to create a connection without any subscriptions."
             items={guildOptions}
             selected={form.guild_id}
             onSelect={(value) => {
@@ -502,6 +505,7 @@ function RepositoryConnections() {
           />
           <SearchDropdown
             label="Channel (optional)"
+            tooltip="The Discord text channel where event messages will be posted. Must belong to the selected server."
             items={createChannelOptions}
             selected={form.channel_id}
             onSelect={(value) => updateCreateForm("channel_id", value)}
@@ -564,13 +568,17 @@ function RepositoryConnections() {
           )}
 
           <div>
-            <p className="mb-1.5 text-xs text-discord-500">Events</p>
-            <div className="flex flex-wrap gap-2">
+            <p className="mb-1.5 text-xs text-discord-500">
+              Events
+              <Tooltip>Choose which GitHub events trigger notifications to the selected Discord channel.</Tooltip>
+            </p>
+            <div className="grid grid-cols-2 gap-2">
               {ALL_EVENTS.map((event) => (
                 <CheckButton
                   key={event}
                   checked={subForm.events.includes(event)}
                   onChange={() => toggleSubEvent(event)}
+                  className="w-full justify-center"
                 >
                   {event === "pull_request" ? "Pull Request" : event.charAt(0).toUpperCase() + event.slice(1)}
                 </CheckButton>
@@ -588,7 +596,10 @@ function RepositoryConnections() {
 
             <div className={subForm.ai_summary_enabled ? "" : "invisible"}>
               <div className="mt-3">
-                <p className="mb-1.5 text-xs text-discord-500">AI Max Diff Characters</p>
+                <p className="mb-1.5 text-xs text-discord-500">
+                  AI Max Diff Characters
+                  <Tooltip>Maximum characters from the diff sent to the AI for summarization. Higher values give more detailed summaries but may be slower.</Tooltip>
+                </p>
                 <NumberStepper
                   value={subForm.ai_max_diff_chars}
                   onChange={(v) => setSubForm((prev) => ({ ...prev, ai_max_diff_chars: v }))}
